@@ -1,42 +1,48 @@
 import os
-from typing import List
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from typing import List, Optional
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
+from src.db.manager import DatabaseManager
+from src.db.models import KnowledgeItem
 
 class RAGService:
-    def __init__(self, knowledge_dir: str = "knowledge", chroma_dir: str = "data/chroma"):
-        self.knowledge_dir = knowledge_dir
+    def __init__(self, chroma_dir: str = "data/chroma"):
         self.chroma_dir = chroma_dir
         # Use a lightweight, local embedding model
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         self.vectorstore = None
+        self.db = DatabaseManager()
 
-    def build_index(self):
-        """Loads documents, splits them, and creates a Chroma vector store."""
-        print(f"Building index from {self.knowledge_dir}...")
+    def build_index_from_db(self):
+        """Builds the vector index from KnowledgeItem records in the database."""
+        print("Building index from Database...")
         
-        # Load all markdown/text files
-        loader = DirectoryLoader(self.knowledge_dir, glob="**/*.md", loader_cls=TextLoader)
-        documents = loader.load()
+        # Get all knowledge items from DB
+        items = self.db.get_all(KnowledgeItem)
         
-        if not documents:
-            print("No documents found in knowledge directory.")
+        if not items:
+            print("No knowledge items found in database.")
             return
 
-        # Split documents into manageable chunks
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=50
-        )
-        splits = text_splitter.split_documents(documents)
-        print(f"Created {len(splits)} chunks from {len(documents)} documents.")
+        documents = []
+        for item in items:
+            # Create a document for each item
+            content = f"Query: {item.query}\nContent: {item.content}"
+            # If it has a pet, include that in the metadata/content for better retrieval
+            doc = Document(
+                page_content=content,
+                metadata={
+                    "id": item.id,
+                    "category": item.category,
+                    "pet_id": item.pet_id
+                }
+            )
+            documents.append(doc)
 
-        # Create and persist the vector store
+        print(f"Creating index from {len(documents)} database records...")
         self.vectorstore = Chroma.from_documents(
-            documents=splits,
+            documents=documents,
             embedding=self.embeddings,
             persist_directory=self.chroma_dir
         )
@@ -44,15 +50,16 @@ class RAGService:
 
     def load_index(self):
         """Loads an existing Chroma vector store."""
-        if os.path.exists(self.chroma_dir):
-            print(f"Loading existing index from {self.chroma_dir}...")
-            self.vectorstore = Chroma(
-                persist_directory=self.chroma_dir,
-                embedding_function=self.embeddings
-            )
-            print("Index loaded.")
-        else:
-            print("No existing index found. Please run build_index() first.")
+        if self.vectorstore is None:
+            if os.path.exists(self.chroma_dir):
+                print(f"Loading existing index from {self.chroma_dir}...")
+                self.vectorstore = Chroma(
+                    persist_directory=self.chroma_dir,
+                    embedding_function=self.embeddings
+                )
+                print("Index loaded.")
+            else:
+                print("No existing index found.")
 
     def query(self, query_text: str, k: int = 3) -> List[Document]:
         """Performs a similarity search and returns the top k documents."""
@@ -65,19 +72,10 @@ class RAGService:
         results = self.vectorstore.similarity_search(query_text, k=k)
         return results
 
-if __name__ == "__main__":
-    # Quick test
-    rag = RAGService()
-    rag.build_index()
-    
-    test_queries = [
-        "Where is the heartworm pill?",
-        "Where is the leash?",
-        "How much Apoquel should I give?"
-    ]
-    
-    for q in test_queries:
-        print(f"\n--- Query: {q} ---")
-        docs = rag.query(q)
-        for i, doc in enumerate(docs):
-            print(f"Result {i+1}: {doc.page_content[:200]}...")
+    def rebuild_index(self):
+        """Rebuilds the entire index from scratch."""
+        # Delete old index directory to ensure a clean rebuild
+        import shutil
+        if os.path.exists(self.chroma_dir):
+            shutil.rmtree(self.chroma_dir)
+        self.build_index_from_db()

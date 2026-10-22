@@ -1,4 +1,5 @@
-from sqlmodel import Field, SQLModel, Relationship
+import re
+from sqlmodel import Field, SQLModel, Relationship, validator
 from typing import Optional, List
 from datetime import datetime, timezone
 import enum
@@ -37,6 +38,12 @@ class Schedule(SQLModel, table=True):
     time_of_day: str  # Format HH:MM
     frequency: str = "daily"
     last_run: Optional[datetime] = Field(default=None)
+
+    @validator("time_of_day")
+    def validate_time(cls, v):
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("time_of_day must be in HH:MM format")
+        return v
 
     # Relationships
     pet: Pet = Relationship(back_populates="schedules")
