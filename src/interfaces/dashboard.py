@@ -164,6 +164,8 @@ def image_data_uri(path: str) -> str:
 
 
 STOPWORDS = {"and", "the", "for", "with", "his", "her", "their", "favorite", "if", "what", "where", "how"}
+SPECIES = {"cat", "dog"}  # only break ties, e.g. "cat food" vs. Biscuit's food
+SYNONYMS = {"eat": "food", "feed": "food", "meal": "food", "kibble": "food"}
 
 
 def stem_words(text: str) -> set:
@@ -174,7 +176,7 @@ def stem_words(text: str) -> set:
             if word.endswith(suffix) and len(word) - len(suffix) >= 3:
                 word = word[: -len(suffix)]
                 break
-        words.add(word)
+        words.add(SYNONYMS.get(word, word))
     return words
 
 
@@ -191,12 +193,16 @@ def related_photos(db, question: str, answer: str, limit: int = 2) -> list:
             continue
         if asked_pets and item.pet_id and item.pet_id not in asked_pets:
             continue
-        keywords = {w for w in stem_words(item.query) if len(w) >= 3} - STOPWORDS - pet_names
+        topic_words = {w for w in stem_words(item.query) if len(w) >= 3} - STOPWORDS - pet_names
+        keywords = topic_words - SPECIES
         score = 2 * len(keywords & q_words) + len(keywords & a_words)
         if keywords & q_words or score >= 2:
-            scored.append((score, item))
-    scored.sort(key=lambda pair: -pair[0])
-    return [{"path": i.media_path, "caption": i.query} for _, i in scored[:limit]]
+            scored.append((score + 0.5 * len(topic_words & SPECIES & q_words), item))
+    if not scored:
+        return []
+    best = max(score for score, _ in scored)
+    top = [item for score, item in sorted(scored, key=lambda pair: -pair[0]) if score == best]
+    return [{"path": i.media_path, "caption": i.query} for i in top[:limit]]
 
 
 @st.cache_resource
