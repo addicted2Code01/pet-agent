@@ -77,6 +77,24 @@ KNOWLEDGE = [
 ]
 
 
+# Generic stock photos (see assets/demo/CREDITS.md) shown in chat answers.
+# Medications deliberately have none: a photo of a different product could mislead.
+DEMO_PHOTOS = {
+    "Litter box": "litter-box.jpg",
+    "Cat carrier": "cat-carrier.jpg",
+    "Cat food": "cat-food.jpg",
+    "Brush": "cat-brush.jpg",
+    "Sonic's favorite toys": "toy-mouse.jpg",
+    "Sonic's favorite spots": "cat-tree.jpg",
+    "Leash and harness": "leash-harness.jpg",
+    "Dog bed": "dog-bed.jpg",
+    "Biscuit's favorite toys": "rope-toy.jpg",
+    "Feeding Biscuit": "dog-food.jpg",
+    "First aid kit": "first-aid-kit.jpg",
+}
+DEMO_PHOTO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "demo"))
+
+
 def seed():
     db = DatabaseManager()
     db.create_db_and_tables()
@@ -107,6 +125,19 @@ def seed():
                     pet_id=pets[pet_name].id if pet_name else None,
                 ))
                 print(f"Added knowledge: {topic}")
+        session.commit()
+
+        biscuit = pets["Biscuit"]
+        if not biscuit.photo_path:
+            biscuit.photo_path = os.path.join(DEMO_PHOTO_DIR, "rope-toy.jpg")
+            session.add(biscuit)
+            print("Added photo: Biscuit")
+
+        for item in session.exec(select(KnowledgeItem)).all():
+            if item.query in DEMO_PHOTOS and not item.media_path:
+                item.media_path = os.path.join(DEMO_PHOTO_DIR, DEMO_PHOTOS[item.query])
+                session.add(item)
+                print(f"Added photo: {item.query}")
         session.commit()
 
         # A little history from yesterday, so the Activity page isn't empty.

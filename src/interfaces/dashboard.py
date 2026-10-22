@@ -1,6 +1,7 @@
 import sys
 import os
 import base64
+import re
 import html
 import mimetypes
 
@@ -67,6 +68,20 @@ h1, h2, h3, h4, .paw-title, [data-baseweb="tab"] p {
   width: 120px; height: 120px; border-radius: 50%; object-fit: cover;
   border: 5px solid var(--peach); display: block; margin: 0 auto;
   animation: bob 3.2s ease-in-out infinite;
+}
+/* Hover a pet photo to see it bigger */
+.pet-card { transition: z-index 0s; }
+.pet-card:hover { z-index: 20; }
+img.pet-avatar {
+  cursor: zoom-in; position: relative;
+  transition: transform 0.35s cubic-bezier(.2,.9,.3,1.3), border-radius 0.35s ease, box-shadow 0.35s ease;
+}
+img.pet-avatar:hover {
+  animation: none;  /* a running or paused animation would override the transform */
+  transform: scale(2.6) translateY(18px);
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(74,59,54,0.35);
+  z-index: 30;
 }
 .pet-avatar.emoji {
   display: flex; align-items: center; justify-content: center;
@@ -148,15 +163,40 @@ def image_data_uri(path: str) -> str:
         return f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
 
 
-def related_photos(db, text: str) -> list:
-    """Photos for knowledge items whose topic is mentioned in the question or answer."""
-    text = text.lower()
-    photos = []
+STOPWORDS = {"and", "the", "for", "with", "his", "her", "their", "favorite", "if", "what", "where", "how"}
+
+
+def stem_words(text: str) -> set:
+    """Lowercase words with crude plural/-ing stripping, so 'toys' matches 'toy'."""
+    words = set()
+    for word in re.findall(r"[a-z]+", text.lower().replace("'s", "")):
+        for suffix in ("ing", "es", "s"):
+            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+                word = word[: -len(suffix)]
+                break
+        words.add(word)
+    return words
+
+
+def related_photos(db, question: str, answer: str, limit: int = 2) -> list:
+    """Photos for knowledge items whose topic matches the question (or, less strongly, the answer)."""
+    pets = db.get_all(Pet)
+    pet_names = {p.name.lower() for p in pets}
+    asked_pets = {p.id for p in pets if p.name.lower() in question.lower()}
+    q_words, a_words = stem_words(question), stem_words(answer)
+
+    scored = []
     for item in db.get_all(KnowledgeItem):
-        topic = item.query.split("(")[0].strip().lower()
-        if item.media_path and os.path.exists(item.media_path) and topic and topic in text:
-            photos.append({"path": item.media_path, "caption": item.query})
-    return photos
+        if not (item.media_path and os.path.exists(item.media_path)):
+            continue
+        if asked_pets and item.pet_id and item.pet_id not in asked_pets:
+            continue
+        keywords = {w for w in stem_words(item.query) if len(w) >= 3} - STOPWORDS - pet_names
+        score = 2 * len(keywords & q_words) + len(keywords & a_words)
+        if keywords & q_words or score >= 2:
+            scored.append((score, item))
+    scored.sort(key=lambda pair: -pair[0])
+    return [{"path": i.media_path, "caption": i.query} for _, i in scored[:limit]]
 
 
 @st.cache_resource
@@ -238,7 +278,7 @@ class DashboardApp:
                 with st.spinner("Sniffing out the answer... 🐾"):
                     answer = get_agent().chat(question, history)
                 st.write(answer)
-                photos = related_photos(self.db, f"{question} {answer}")
+                photos = related_photos(self.db, question, answer)
                 for photo in photos:
                     st.image(photo["path"], caption=photo["caption"], width=300)
             history += [
