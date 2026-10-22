@@ -32,7 +32,17 @@ Rules:
 - For medication, state the drug, dose, timing and location exactly as written.
 - If the answer is not in the information, say you don't know and tell the sitter to contact the owner.
 - If something sounds like an emergency, give any emergency contacts and vet information first.
+- For "what's next" or timing questions, use "Right now" and the schedule statuses below:
+  OVERDUE tasks first, then the "Next up" task. Don't do your own time arithmetic.
 - Keep answers short and clear."""
+
+
+def ago(delta) -> str:
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 60:
+        return f"{minutes} min ago"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m ago" if hours < 24 else f"{hours // 24} day(s) ago"
 
 
 class PetAgent:
@@ -42,20 +52,24 @@ class PetAgent:
         self.client = OpenAI(base_url=self.base_url, api_key=os.getenv("LLM_API_KEY", "not-needed"), timeout=300)
         self.db = DatabaseManager()
 
-    def build_context(self) -> str:
-        """All household knowledge, plus today's tasks. Small enough to send in full."""
+    def build_context(self, now: Optional[datetime] = None) -> str:
+        """All household knowledge, plus the current time and today's task status."""
+        now = now or datetime.now().astimezone()
         with self.db.get_session() as session:
             pets = session.exec(select(Pet)).all()
             pet_names = {p.id: p.name for p in pets}
             items = session.exec(select(KnowledgeItem)).all()
             schedules = session.exec(select(Schedule)).all()
-            today = datetime.now().astimezone().date()
-            done_ids = {
-                log.schedule_id for log in session.exec(select(ActivityLog)).all()
-                if log.schedule_id and to_local(log.timestamp).date() == today
-            }
+            logs = sorted(session.exec(select(ActivityLog)).all(), key=lambda l: l.timestamp, reverse=True)
+            schedule_names = {s.id: s.task_name for s in schedules}
 
-        lines = ["## Pets"]
+        done_at = {}
+        for log in logs:
+            when = to_local(log.timestamp)
+            if log.schedule_id and when.date() == now.date() and log.schedule_id not in done_at:
+                done_at[log.schedule_id] = when
+
+        lines = [f"## Right now\n{now.strftime('%A, %B %d, %Y, %I:%M %p').replace(' 0', ' ')}\n", "## Pets"]
         lines += [f"- {p.name}: {p.description or ''}" for p in pets] or ["- (none)"]
 
         for category in CATEGORY_ORDER:
@@ -69,9 +83,31 @@ class PetAgent:
 
         if schedules:
             lines.append("\n## Today's schedule")
+            current = now.strftime("%H:%M")
+            next_up = None
             for s in sorted(schedules, key=lambda s: s.time_of_day):
-                state = "done" if s.id in done_ids else "pending"
+                if s.id in done_at:
+                    state = f"done at {done_at[s.id].strftime('%H:%M')}"
+                elif s.time_of_day < current:
+                    state = "OVERDUE"
+                else:
+                    state = "upcoming"
+                    next_up = next_up or s
                 lines.append(f"- {s.time_of_day} {pet_names.get(s.pet_id, '?')}: {s.task_name} ({state})")
+            if next_up:
+                lines.append(f"Next up: {next_up.time_of_day} {pet_names.get(next_up.pet_id, '?')}: {next_up.task_name}")
+            else:
+                lines.append("Next up: nothing else today.")
+
+        if logs:
+            lines.append("\n## Recently logged")
+            for log in logs[:8]:
+                task = schedule_names.get(log.schedule_id, "Activity")
+                notes = f" - {log.notes}" if log.notes else ""
+                lines.append(
+                    f"- {to_local(log.timestamp).strftime('%a %H:%M')} ({ago(now - to_local(log.timestamp))}): "
+                    f"{pet_names.get(log.pet_id, '?')} {task} {log.status.value}{notes}"
+                )
 
         context = "\n".join(lines)
         if len(context) / 4 > 20000:
