@@ -3,18 +3,11 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pet-agent"
+name = "pawsitter"
 version = "0.1.0"
 dependencies = [
-    "streamlit",
-    "sqlmodel",
-    "langchain",
-    "langchain-community",
-    "langchain-chroma",
-    "langchain-huggingface",
-    "chromadb",
-    "litellm",
-    "discord.py",
-    "python-dotenv",
-    "pydantic",
+    "streamlit>=1.40",
+    "sqlmodel>=0.0.22",
+    "openai>=1.50",
+    "python-dotenv>=1.0",
 ]
