@@ -21,8 +21,13 @@ class DatabaseManager:
             cursor.close()
 
     def create_db_and_tables(self):
-        # Ensure data directory exists
         SQLModel.metadata.create_all(self.engine)
+        # create_all doesn't add columns to existing tables; add newer ones here.
+        with self.engine.begin() as conn:
+            from sqlalchemy import text
+            columns = {row[1] for row in conn.execute(text("PRAGMA table_info(pet)"))}
+            if "photo_path" not in columns:
+                conn.execute(text("ALTER TABLE pet ADD COLUMN photo_path VARCHAR"))
 
     def get_session(self) -> Session:
         return Session(self.engine)
