@@ -1,101 +1,121 @@
 import os
 import logging
-import asyncio
-from typing import Optional, Dict, Any
-from dotenv import load_dotenv
-from litellm import acompletion
-from src.core.rag_service import RAGService
-from src.db.manager import DatabaseManager
-from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem
+from typing import Optional, List, Dict
 from datetime import datetime, timezone
-from sqlalchemy import func
 
-# Setup logging
+from dotenv import load_dotenv
+from openai import OpenAI
+from sqlalchemy import func
+from sqlmodel import select
+
+from src.db.manager import DatabaseManager
+from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem, KnowledgeCategory
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Emergency information first, so the model sees it before anything else.
+CATEGORY_ORDER = [
+    KnowledgeCategory.EMERGENCY,
+    KnowledgeCategory.MEDICATION,
+    KnowledgeCategory.INSTRUCTION,
+    KnowledgeCategory.LOCATION,
+    KnowledgeCategory.GENERAL,
+]
+
+SYSTEM_RULES = """You are a Pet Sitter Assistant. You help a pet sitter care for the owner's pets.
+
+Rules:
+- Answer ONLY from the household information below. Never guess or invent details.
+- For medication, state the drug, dose, timing and location exactly as written.
+- If the answer is not in the information, say you don't know and tell the sitter to contact the owner.
+- If something sounds like an emergency, give any emergency contacts and vet information first.
+- Keep answers short and clear."""
+
+
 class PetAgent:
     def __init__(self, model_name: Optional[str] = None):
-        # Item 4: Read model from env
-        self.model_name = model_name or os.getenv("LLM_MODEL", "llama3")
+        self.model_name = model_name or os.getenv("LLM_MODEL", "local-model")
         self.base_url = os.getenv("LLM_BASE_URL", "http://localhost:8080/v1")
-        
+        self.client = OpenAI(base_url=self.base_url, api_key=os.getenv("LLM_API_KEY", "not-needed"), timeout=300)
         self.db = DatabaseManager()
-        self.rag = RAGService()
-        self.rag.load_index()
 
-    async def chat(self, user_id: str, user_input: str) -> str:
-        """Handles conversational queries using RAG."""
+    def build_context(self) -> str:
+        """All household knowledge, plus today's tasks. Small enough to send in full."""
+        with self.db.get_session() as session:
+            pets = session.exec(select(Pet)).all()
+            pet_names = {p.id: p.name for p in pets}
+            items = session.exec(select(KnowledgeItem)).all()
+            schedules = session.exec(select(Schedule)).all()
+            today = datetime.now(timezone.utc).date()
+            done_ids = {
+                log.schedule_id for log in session.exec(select(ActivityLog)).all()
+                if log.schedule_id and log.timestamp.date() == today
+            }
+
+        lines = ["## Pets"]
+        lines += [f"- {p.name}: {p.description or ''}" for p in pets] or ["- (none)"]
+
+        for category in CATEGORY_ORDER:
+            group = [i for i in items if i.category == category]
+            if not group:
+                continue
+            lines.append(f"\n## {category.value.title()}")
+            for i in group:
+                pet = f" [{pet_names.get(i.pet_id)}]" if i.pet_id in pet_names else ""
+                lines.append(f"- {i.query}{pet}: {i.content}")
+
+        if schedules:
+            lines.append("\n## Today's schedule")
+            for s in schedules:
+                state = "done" if s.id in done_ids else "pending"
+                lines.append(f"- {s.time_of_day} {pet_names.get(s.pet_id, '?')}: {s.task_name} ({state})")
+
+        context = "\n".join(lines)
+        if len(context) / 4 > 20000:
+            logger.warning("Household context is over ~20k tokens; consider search instead of sending everything.")
+        return context
+
+    def chat(self, user_input: str, history: Optional[List[Dict[str, str]]] = None) -> str:
+        """Answers a sitter's question using all household knowledge."""
+        messages = [{"role": "system", "content": f"{SYSTEM_RULES}\n\n# Household information\n{self.build_context()}"}]
+        messages += [{"role": m["role"], "content": m["content"]} for m in (history or [])[-10:]]
+        messages.append({"role": "user", "content": user_input})
         try:
-            # Item 5: Wrap RAG in thread to avoid blocking the event loop
-            context_docs = await asyncio.to_thread(self.rag.query, user_input)
-            context_text = "\n".join([doc.page_content for doc in context_docs])
-
-            # 2. Construct the prompt
-            system_prompt = f"""You are a helpful and friendly Pet Sitter AI Assistant. 
-Your goal is to help the sitter with questions about the pets, their schedules, 
-and where items are located in the house.
-
-Use the following pieces of retrieved context to answer the user's question. 
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
-Keep your responses concise and helpful.
-
-Context:
-{context_text}
-"""
-
-            # 3. Call the LLM via LiteLLM (Async)
-            # Item 5: Use acompletion
-            response = await acompletion(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ],
-                api_base=self.base_url,
-                temperature=0.2
+                messages=messages,
+                temperature=0.2,
             )
             return response.choices[0].message.content
-
-        except Exception as e:
-            # Item 3: Log full error, return generic message
-            logger.error(f"Error in PetAgent.chat for user {user_id}: {str(e)}", exc_info=True)
-            return "I'm sorry, I encountered an error while trying to help. Please try again later."
+        except Exception:
+            logger.exception("Error in PetAgent.chat")
+            return "Sorry, I couldn't reach the assistant right now. Please try again, or contact the owner."
 
     def log_activity(self, pet_id: int, task_name: str, status: str, notes: Optional[str] = None) -> str:
         """Logs a completed or missed activity in the database."""
         with self.db.get_session() as session:
-            from sqlmodel import select
-            # Item 18: Match task name more robustly if needed, but here we look for exact
-            statement = select(Schedule).where(Schedule.pet_id == pet_id, Schedule.task_name == task_name)
-            schedule_item = session.exec(statement).first()
-
-            new_log = ActivityLog(
+            schedule_item = session.exec(
+                select(Schedule).where(Schedule.pet_id == pet_id, Schedule.task_name == task_name)
+            ).first()
+            session.add(ActivityLog(
                 pet_id=pet_id,
                 schedule_id=schedule_item.id if schedule_item else None,
                 status=status,
                 notes=notes,
-                timestamp=datetime.now(timezone.utc) # Item 15: Use UTC
-            )
-            session.add(new_log)
-            session.commit()
-            
+            ))
             if schedule_item:
                 schedule_item.last_run = datetime.now(timezone.utc)
                 session.add(schedule_item)
-                session.commit()
-            
+            session.commit()
             return f"Successfully logged {status} for {task_name}."
 
     def get_pet_by_name(self, name: str) -> Optional[Pet]:
         """Finds a pet by its name (case-insensitive)."""
-        # Item 17: Case-insensitive lookup
         with self.db.get_session() as session:
-            from sqlmodel import select
-            statement = select(Pet).where(func.lower(Pet.name) == name.lower())
-            return session.exec(statement).first()
+            return session.exec(select(Pet).where(func.lower(Pet.name) == name.lower())).first()
 
     def get_pet_info(self, pet_id: int) -> str:
         """Returns basic info about a pet."""
@@ -105,22 +125,10 @@ Context:
                 return "Pet not found."
             return f"Pet: {pet.name}\nDescription: {pet.description}"
 
-if __name__ == "__main__":
-    # Quick test (Requires a running local LLM server)
-    import asyncio
-    
-    async def test():
-        agent = PetAgent()
-        print("Testing agent initialization...")
-        print(f"Model: {agent.model_name}")
-        print(f"Base URL: {agent.base_url}")
-        print("Agent initialized.")
-        # Test pet info (assuming Luna is in DB)
-        # We can't easily run async in a simple script without knowing if DB is ready
-        # but we'll assume init_db.py was run.
-        try:
-            print(f"Pet info test (Luna): {agent.get_pet_info(1)}")
-        except Exception as e:
-            print(f"Pet info test failed (this is okay if DB not seeded): {e}")
 
-    asyncio.run(test())
+if __name__ == "__main__":
+    import sys
+    agent = PetAgent()
+    print(agent.build_context())
+    if len(sys.argv) > 1:
+        print("\n---\n" + agent.chat(" ".join(sys.argv[1:])))

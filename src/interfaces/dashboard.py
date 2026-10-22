@@ -1,11 +1,38 @@
-import streamlit as st
+import sys
 import os
+
+# Streamlit only puts this file's folder on the import path; add the project root.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+import streamlit as st
+from dotenv import load_dotenv
 from datetime import datetime
 from src.db.manager import DatabaseManager
 from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem, LogStatus, KnowledgeCategory
 
 # Set page config
-st.set_page_config(page_title="Pet Sitter AI Dashboard", layout="wide")
+st.set_page_config(page_title="Pet Sitter AI Dashboard", layout="centered")
+load_dotenv()
+
+
+MEDIA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "media"))
+
+
+def related_photos(db, text: str) -> list:
+    """Photos for knowledge items whose topic is mentioned in the question or answer."""
+    text = text.lower()
+    photos = []
+    for item in db.get_all(KnowledgeItem):
+        topic = item.query.split("(")[0].strip().lower()
+        if item.media_path and os.path.exists(item.media_path) and topic and topic in text:
+            photos.append({"path": item.media_path, "caption": item.query})
+    return photos
+
+
+@st.cache_resource
+def get_agent():
+    from src.core.agent import PetAgent
+    return PetAgent()
 
 class DashboardApp:
     def __init__(self):
@@ -15,13 +42,56 @@ class DashboardApp:
     def run(self):
         st.title("🐾 Pet Sitter AI Dashboard")
         
-        tab1, tab2 = st.tabs(["Owner View (Management)", "Sitter View (Daily Tasks)"])
+        sitter_tab, owner_tab = st.tabs(["Sitter View", "Owner View (Management)"])
 
-        with tab1:
-            self.render_owner_view()
-        
-        with tab2:
+        with sitter_tab:
+            self.render_sitter_chat()
             self.render_sitter_view()
+
+        with owner_tab:
+            if self.owner_unlocked():
+                self.render_owner_view()
+
+    def owner_unlocked(self) -> bool:
+        password = os.getenv("OWNER_PASSWORD")
+        if not password or st.session_state.get("owner_ok"):
+            return True
+        entered = st.text_input("Owner password", type="password")
+        if entered == password:
+            st.session_state.owner_ok = True
+            st.rerun()
+        elif entered:
+            st.error("Wrong password.")
+        return False
+
+    def render_sitter_chat(self):
+        st.header("Ask about the pets")
+        history = st.session_state.setdefault("chat_history", [])
+        for msg in history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+                for photo in msg.get("photos", []):
+                    st.image(photo["path"], caption=photo["caption"], width=300)
+
+        question = st.chat_input("e.g. How much Ondansetron does Sonic get?")
+        if question:
+            with st.chat_message("user"):
+                st.write(question)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    answer = get_agent().chat(question, history)
+                st.write(answer)
+                photos = related_photos(self.db, f"{question} {answer}")
+                for photo in photos:
+                    st.image(photo["path"], caption=photo["caption"], width=300)
+            history += [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer, "photos": photos},
+            ]
+
+        if history and st.button("Clear chat"):
+            st.session_state.chat_history = []
+            st.rerun()
 
     def render_owner_view(self):
         st.header("Owner Management")
@@ -116,17 +186,6 @@ class DashboardApp:
     def manage_knowledge(self):
         st.subheader("Knowledge Base")
         
-        # Import RAG service here to avoid circular imports if needed
-        from src.core.rag_service import RAGService
-        rag = RAGService()
-
-        # Rebuild Button
-        if st.button("🔄 Rebuild Vector Index (Sync with DB)"):
-            with st.spinner("Rebuilding index..."):
-                rag.rebuild_index()
-                st.success("Index rebuilt successfully!")
-                st.rerun()
-
         # Form to add a new knowledge item
         with st.expander("➕ Add New Knowledge Item"):
             with st.form("add_knowledge_form"):
@@ -138,6 +197,8 @@ class DashboardApp:
                 pets = self.db.get_all(Pet)
                 target_pet_name = st.selectbox("Associated Pet (Optional)", ["None"] + [p.name for p in pets])
                 
+                photo = st.file_uploader("Photo (optional)", type=["png", "jpg", "jpeg", "gif", "webp"])
+
                 submit_knowledge = st.form_submit_button("Add Knowledge")
 
                 if submit_knowledge and query_text and content_text:
@@ -146,14 +207,23 @@ class DashboardApp:
                         target_pet = next(p for p in pets if p.name == target_pet_name)
                         target_pet_id = target_pet.id
                     
+                    media_path = None
+                    if photo:
+                        os.makedirs(MEDIA_DIR, exist_ok=True)
+                        safe_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{os.path.basename(photo.name)}"
+                        media_path = os.path.join(MEDIA_DIR, safe_name)
+                        with open(media_path, "wb") as f:
+                            f.write(photo.getbuffer())
+
                     new_item = KnowledgeItem(
                         query=query_text,
                         content=content_text,
                         category=KnowledgeCategory(category),
-                        pet_id=target_pet_id
+                        pet_id=target_pet_id,
+                        media_path=media_path
                     )
                     self.db.save_item(new_item)
-                    st.success("Knowledge item added! Remember to rebuild the index.")
+                    st.success("Knowledge item added!")
                     st.rerun()
 
         # List existing knowledge items
@@ -168,6 +238,8 @@ class DashboardApp:
                     with col1:
                         st.write(f"**{item.query}** ({item.category.value})")
                         st.caption(item.content[:100] + ("..." if len(item.content) > 100 else ""))
+                        if item.media_path and os.path.exists(item.media_path):
+                            st.image(item.media_path, width=150)
                     with col2:
                         if st.button("Delete", key=f"del_know_{item.id}"):
                             self.db.delete_item(KnowledgeItem, item.id)

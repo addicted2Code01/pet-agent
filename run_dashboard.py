@@ -10,7 +10,8 @@ def run_dashboard():
     print("Starting Streamlit Dashboard...")
     print("Open http://localhost:8501 in your browser.")
     try:
-        subprocess.run(["streamlit", "run", "src/interfaces/dashboard.py"], check=True)
+        root = os.path.dirname(os.path.abspath(__file__))
+        subprocess.run([sys.executable, "-m", "streamlit", "run", os.path.join(root, "src/interfaces/dashboard.py"), "--server.address", "0.0.0.0"], check=True, cwd=root)
     except KeyboardInterrupt:
         print("\nStopping dashboard.")
     except Exception as e:

@@ -58,7 +58,7 @@ class PetSitterBot(commands.Bot):
         # However, the user wants a conversational agent for regular messages.
         if not message.content.startswith('/'):
             async with message.channel.typing():
-                response = await self.agent.chat(str(message.author.id), message.content)
+                response = await asyncio.to_thread(self.agent.chat, message.content)
                 # Item 19: Handle long replies
                 for chunk in split_message(response):
                     await message.reply(chunk)
