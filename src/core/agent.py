@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from src.db.manager import DatabaseManager
-from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem, KnowledgeCategory
+from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem, KnowledgeCategory, to_local
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -49,10 +49,10 @@ class PetAgent:
             pet_names = {p.id: p.name for p in pets}
             items = session.exec(select(KnowledgeItem)).all()
             schedules = session.exec(select(Schedule)).all()
-            today = datetime.now(timezone.utc).date()
+            today = datetime.now().astimezone().date()
             done_ids = {
                 log.schedule_id for log in session.exec(select(ActivityLog)).all()
-                if log.schedule_id and log.timestamp.date() == today
+                if log.schedule_id and to_local(log.timestamp).date() == today
             }
 
         lines = ["## Pets"]
@@ -69,7 +69,7 @@ class PetAgent:
 
         if schedules:
             lines.append("\n## Today's schedule")
-            for s in schedules:
+            for s in sorted(schedules, key=lambda s: s.time_of_day):
                 state = "done" if s.id in done_ids else "pending"
                 lines.append(f"- {s.time_of_day} {pet_names.get(s.pet_id, '?')}: {s.task_name} ({state})")
 

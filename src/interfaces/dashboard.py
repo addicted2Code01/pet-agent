@@ -11,7 +11,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from src.db.manager import DatabaseManager
-from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem, LogStatus, KnowledgeCategory
+from src.db.models import Pet, Schedule, ActivityLog, KnowledgeItem, LogStatus, KnowledgeCategory, to_local
 
 st.set_page_config(page_title="Pawsitter", page_icon="🐾", layout="centered")
 load_dotenv()
@@ -184,8 +184,8 @@ class DashboardApp:
 
         with sitter_tab:
             self.render_pet_cards()
-            self.render_sitter_view()
             self.render_sitter_chat()
+            self.render_sitter_view()
 
         with owner_tab:
             if self.owner_unlocked():
@@ -413,7 +413,7 @@ class DashboardApp:
         pet_names = {p.id: p.name for p in self.db.get_all(Pet)}
         for log in sorted(logs, key=lambda x: x.timestamp, reverse=True):
             st.write(
-                f"**{log.timestamp.strftime('%Y-%m-%d %H:%M')}** · "
+                f"**{to_local(log.timestamp).strftime('%a %b %d, %H:%M')}** · "
                 f"{pet_names.get(log.pet_id, 'Unknown')} · {log.status.value}"
             )
             if log.notes:
@@ -425,10 +425,10 @@ class DashboardApp:
         if not pets:
             return
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now().astimezone().date()
         done_ids = {
             log.schedule_id for log in self.db.get_all(ActivityLog)
-            if log.schedule_id and log.timestamp.date() == today
+            if log.schedule_id and to_local(log.timestamp).date() == today
         }
         schedules = self.db.get_all(Schedule)
 

@@ -4,6 +4,13 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import enum
 
+def to_local(ts: datetime) -> datetime:
+    """Converts a stored timestamp (UTC, naive after a SQLite round-trip) to local time."""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone()
+
+
 class LogStatus(str, enum.Enum):
     COMPLETED = "completed"
     MISSED = "missed"
