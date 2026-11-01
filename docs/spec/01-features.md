@@ -114,7 +114,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Web app: owner management + caregiver view | MVP | |
 | Mobile app or PWA for caregivers, offline-capable | MVP/V2 | See open questions. |
 | AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Uses the assistant port; tools = core queries. |
-| MCP server exposing core queries/commands as tools | V2 | |
+| MCP server exposing core queries/commands as tools | V2 | Can run on the owner's own machine against the cloud API; adds no model cost. |
 | Chat bots (Discord, Slack, Telegram, SMS) | Later | Each is an adapter with its own privacy review. |
 | Voice (smart speaker) | Later | |
 
@@ -125,5 +125,23 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Audit log of sensitive reads (secrets, label photos) | MVP | |
 | Data export and account deletion | MVP | Privacy law and trust. |
 | Backups and point-in-time restore | MVP | |
-| Self-hosted / local-only deployment | ? | See open questions; the original prototype was local-first. |
-| Billing and plans | V2 | |
+| Per-account capability routing: which provider serves the model, vision, media and keys, by data sensitivity | MVP | Cloud providers only at first; see [03 §3.9](03-core-architecture.md#39-deployment-and-placement). |
+| Edge node: run the model and vision, and keep private media and chosen secret keys, on the owner's own hardware | V2 | Dials out to the cloud; no port forwarding. |
+| Engagement readiness check: warn the owner if something a sitter needs (e.g. a home-held key) is offline | V2 | |
+| Self-hosted edition: core and data on the owner's hardware, with a cloud relay for sitters | Later | The original prototype's local-first story. |
+| Billing and plans | V2 | AI allotments ship in MVP regardless; see 1.11. |
+
+## 1.11 AI usage & allotments
+
+| Feature | Priority | Notes |
+|---|---|---|
+| Meter every hosted model call: tokens, our cost and the credits charged | MVP | One gateway in the core; see [03 §3.10](03-core-architecture.md#310-ai-usage-metering). |
+| AI allotment per account per billing period, with a hard stop | MVP | Care features keep working when it runs out. |
+| Rate limits per member and per assistant turn | MVP | Stops bursts and runaway tool loops. |
+| Usage meter with warnings at 80 % and 100 % | MVP | Broken down by member, purpose and model. |
+| Caps per member, per engagement and per purpose | V2 | E.g. limit a sitter's AI use, or keep credits for visit reports. |
+| When the allotment runs out, fall back to the owner's edge node or a cheaper model | V2 | Needs the edge node for the free fallback. |
+| Paid plans and credit top-ups | V2 | Arrives with billing. |
+| Reconciliation against providers' usage reports | V2 | |
+| Paid overage | Later | Opt-in only; no surprise bills. |
+| Bring your own provider key | Later | Recorded, not billable. |

@@ -74,6 +74,12 @@ erDiagram
     MEDIA_ASSET ||--o{ MEDIA_LINK : in
     ACCOUNT ||--o{ EVENT : logs
     ACCOUNT ||--o{ INCIDENT : reports
+
+    ACCOUNT }o--|| PLAN : "subscribes to"
+    ACCOUNT ||--o{ CREDIT_GRANT : funds
+    ACCOUNT ||--o{ USAGE_LIMIT : caps
+    ACCOUNT ||--o{ USAGE_RECORD : meters
+    USAGE_RECORD }o--|| MODEL_RATE : "priced by"
 ```
 
 ## 2.4 Identity, tenancy & access
@@ -94,7 +100,8 @@ erDiagram
 | `name` | string | "Campbell household" |
 | `kind` | enum | `household` · `pro_sitter` · `clinic` · `boarding` (only `household` in MVP) |
 | `default_site_id?` | Site | |
-| `plan`, `settings` | object | Billing tier, feature flags, retention. |
+| `plan_id`, `billing_anchor` | Plan, instant | The plan version, and when billing periods start (see 2.14). |
+| `settings` | object | Feature flags, retention, and the capability routing table ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)). |
 
 **`Membership`**: `(user_id, account_id)` unique.
 
@@ -355,7 +362,7 @@ Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) b
 |---|---|---|
 | `subject_id` | Subject | Usually a site ("Alarm code") or the account ("Wi-Fi"). |
 | `label` | string | Not secret. |
-| `ciphertext`, `key_id` | bytes | Envelope-encrypted via the crypto port; the plaintext never sits in the main database. |
+| `ciphertext`, `key_id` | bytes | Envelope-encrypted via the crypto port; the plaintext never sits in the main database. `key_id` names where the key lives (cloud KMS or the owner's edge node, [03 §3.9.4](03-core-architecture.md#394-trade-off-parts-at-home-can-go-offline)). |
 | `reveal_policy` | enum | `members` · `engaged_caregivers` · `owners_only` |
 | `assistant_access` | enum | `never` (default) · `on_request`: whether AI adapters may ever receive it. |
 
@@ -411,7 +418,66 @@ Severity `urgent` or higher notifies owners immediately through every enabled ch
 
 `WeightRecord` (`pet_id`, `weight`, `measured_at`), `Condition` (`name`, `diagnosed_on`, `status`, notes), `Vaccination` (`vaccine`, `given_on`, `due_on`, `clinic_contact_id`), `VetVisit` (`site_id`, `date`, `reason`, `summary`, documents via `MediaLink role=document`).
 
-## 2.14 Invariants (enforced by the core)
+## 2.14 AI usage & allotments
+
+Hosted model calls are metered per account (see [03 §3.10](03-core-architecture.md#310-ai-usage-metering)). Usage records hold counts and costs, never prompt or reply text.
+
+**`Plan`**: *not account-scoped; versioned.* `code`, `name`, `period` (e.g. `P1M`), `credits_per_period`, `default_limits[]` (`UsageLimit` templates), `features` (flags). Accounts point at a plan version, so editing a plan never silently changes existing accounts.
+
+**`ModelRate`**: *not account-scoped.* A new row for every price change, so past usage keeps the rate it was charged at.
+
+| Field | Type | Notes |
+|---|---|---|
+| `provider`, `model` | string | E.g. `hosted:claude` and the model id |
+| `effective_from` | instant | |
+| `cost_per_mtok` | `{input, output, cache_write, cache_read}` money | What the provider charges us per million tokens |
+| `credits_per_mtok` | `{input, output, cache_write, cache_read}` decimal | What the customer is charged. Proportional to cost = cost-based credits; equal across models = token-based; anything between is a blend. |
+| `cost_per_image?`, `credits_per_image?` | | For vision calls |
+
+**`UsageRecord`**: the immutable ledger, one row per model call.
+
+| Field | Type | Notes |
+|---|---|---|
+| `occurred_at` | instant | |
+| `actor`, `interface` | | Who caused it and through which interface (`system` for automatic visit reports) |
+| `capability` | enum | `language_model` · `vision` (later `embedding`, `speech`, `sms`) |
+| `purpose` | enum | `assistant` · `visit_report` · `photo_lookup` · `summary` · … |
+| `provider`, `model`, `rate_id` | | The rate in force at the time |
+| `tokens` | `{input, output, cache_write, cache_read}` int | As reported by the provider |
+| `images` | int | |
+| `provider_cost` | money | Exact decimal in micro-units of the currency |
+| `credits` | decimal | |
+| `billable` | bool | False for the owner's edge node or an owner-supplied provider key |
+| `outcome` | enum | `ok` · `error` · `cancelled` (failed calls can still use tokens) |
+| `reservation_id`, `correlation_id`, `engagement_id?` | refs | `correlation_id` groups the calls of one assistant turn |
+
+**`CreditGrant`**: credits added to an account.
+
+| Field | Type | Notes |
+|---|---|---|
+| `amount`, `remaining` | decimal | |
+| `source` | enum | `plan_period` · `top_up` (V2) · `promo` · `adjustment` |
+| `valid_from`, `expires_at?` | instant | The plan's grant expires at the end of its period; top-ups may last longer |
+
+The **credit balance** is the sum of unexpired grants' `remaining`. Usage draws from the soonest-expiring grant first.
+
+**`UsageLimit`**: an extra cap, checked with the balance before every billable call.
+
+| Field | Type | Notes |
+|---|---|---|
+| `metric` | enum | `credits` · `tokens` · `cost` · `requests` |
+| `window` | enum + duration | `billing_period` · `rolling` (`P1D`, `PT1H`, `PT1M`) · `turn` (one assistant turn) |
+| `amount` | decimal | |
+| `scope` | object | `account` · `member` (user) · `engagement` · `purpose` · `integration` |
+| `on_exceed` | enum | `block` · `degrade` (try the next provider) · `allow_overage` (later) |
+| `warn_at[]` | percent | Default `[80, 100]` |
+| `source` | enum | `plan` · `owner` (may only tighten the plan's limits) · `admin` |
+
+**`UsageReservation`**: the estimated maximum use of one call, held until it settles: `estimate` (`{credits, tokens, cost, requests}`), `limit_ids[]`, `expires_at`, `status` (`held` · `settled` · `released` · `expired`).
+
+**`UsageCounter`**: derived and rebuildable from the ledger, like `StockLevel` from stock transactions: `(limit_id, window_start)` → `used`, `reserved`.
+
+## 2.15 Invariants (enforced by the core)
 
 1. A `Place` belongs to exactly one `Site`, the same as its parent; there are no cycles.
 2. A trackable has **at most one open** `Placement`, and its `place_id` belongs to its `site_id`. `Trackable.current_*` always mirror it.
@@ -422,8 +488,11 @@ Severity `urgent` or higher notifies owners immediately through every enabled ch
 7. Every entity's `account_id` equals the `account_id` of everything it references.
 8. Any linked `MediaAsset` has `metadata_stripped = true`.
 9. A caregiver's access is valid only within `[engagement.starts_at − access_lead, engagement.ends_at + access_lag]` and only for the engagement's pets and sites.
+10. A billable model call starts only with a held `UsageReservation` that fits within the credit balance and every applicable `UsageLimit`.
+11. Credit balances and usage counters equal what the `UsageRecord` ledger implies, and can be rebuilt from it.
+12. A port request never reaches a provider whose `max_sensitivity` is below the sensitivity of the data it carries.
 
-## 2.15 Mapping from the prototype
+## 2.16 Mapping from the prototype
 
 | Prototype (`src/db/models.py`) | New model |
 |---|---|

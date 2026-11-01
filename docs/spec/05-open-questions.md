@@ -4,21 +4,14 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 ## Product & market
 
-**Q1. Who is the first paying customer?**
-- (a) Pet owners (households) who share access with sitters, friends and family.
-- (b) Professional sitters/walkers managing many client households.
-- (c) Clinics and boarding facilities.
+**Q1. Who is the first paying customer?** ✅
+*Decided:* pet owners (households) who share access with sitters, friends and family. Professional sitters can follow as a tier without a rewrite, because one user can already belong to many accounts. Clinics and boarding facilities need cross-account sharing, so they come later.
 
-*Recommendation:* (a) first. The model already supports many accounts per user, so (b) can follow as a tier without a rewrite. (c) needs cross-account sharing, so later.
+**Q2. Cloud, local-first, or hybrid?** ✅
+*Decided:* cloud first, with the location of each part configurable. The model, vision, media files and secret keys can each run in the cloud or on the owner's hardware (through an edge node), chosen per account and routed by data sensitivity. Each account's structured data still has exactly one home. See [03 §3.9](03-core-architecture.md#39-deployment-and-placement).
 
-**Q2. Cloud, local-first, or hybrid?** (See [03 §3.9](03-core-architecture.md#39-deployment-shapes).)
-The prototype's pitch was "nothing leaves your home". A product sitters use from their own phones, away from your Wi-Fi, mostly wants the cloud.
-
-*Recommendation:* cloud first, with strong privacy (encrypted secrets, EXIF stripping, egress policies). Keep the core storage-agnostic so a self-hosted edition is possible. Defer hybrid sync.
-
-**Q3. Does the AI assistant run locally or hosted?** It affects cost, quality and what data it may see.
-
-*Recommendation:* make it pluggable via the `LanguageModel` port and egress policy. Default to a hosted model on `normal` data in the cloud product; a local model in self-hosted.
+**Q3. Does the AI assistant run locally or hosted?** ✅
+*Decided:* pluggable. The cloud product defaults to a hosted model that only sees `normal` data; a local model on the owner's edge node may see `private` data. Hosted usage is metered against a per-account AI allotment. See [03 §3.10](03-core-architecture.md#310-ai-usage-metering).
 
 ## Domain modeling
 
@@ -64,9 +57,28 @@ The prototype's pitch was "nothing leaves your home". A product sitters use from
 
 *Recommendation:* MVP with push + email for overdue medications and urgent incidents only.
 
+## Placement & AI usage
+
+**Q16. Edge node in MVP or V2?**
+
+*Recommendation:* V2. The MVP builds the seams it needs ([03 §3.9.5](03-core-architecture.md#395-rules-the-core-follows-from-day-one)), so adding it later is one adapter plus configuration. Pull it into MVP only if a local model is a launch requirement.
+
+**Q17. What unit do customers see their allotment in:** credits, tokens or money?
+
+*Recommendation:* show a simple meter ("62 % of this month's AI used, resets Nov 15"), backed by credits whose rates track provider cost. A pricier model then uses the allotment faster, and margins hold when provider prices change. Rolling token and request limits are there only to stop abuse.
+
+**Q18. What happens when the allotment runs out?**
+
+*Recommendation:* in MVP, hosted AI stops until the period resets and every care feature keeps working. In V2, fall back to the owner's edge node or a cheaper model, and sell top-ups. Never bill overage without an opt-in.
+
+**Q19. How big is each plan's allotment?**
+
+*Recommendation:* measure first. Run the beta with generous limits, record the cost per active household for four weeks, then set the standard allotment near the 90th percentile of monthly use.
+
 ## Next steps once these are answered
 
 1. Lock the MVP feature list (01) against the answers.
 2. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 3. Write a test-first spec for `can_administer`, recurrence/DST and `whats_next`, the three safety-critical algorithms.
-4. Plan migration of prototype data (§2.15 in the domain model).
+4. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
+5. Plan migration of prototype data (§2.16 in the domain model).

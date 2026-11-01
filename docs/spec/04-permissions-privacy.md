@@ -16,6 +16,8 @@
 | Report incidents | ✓ | ✓ | ✓ | ✓ |
 | Read activity log | ✓ | ✓ | ✓ | their own engagement's events |
 | Read secret-reveal log | ✓ | ✓ | | |
+| See the account's AI usage; set usage caps | ✓ | ✓ | own usage | own usage |
+| Pair edge nodes; change capability routing | ✓ | | | |
 
 Roles map to **permission sets**. Engagements and standing-caregiver memberships narrow them by **scope** (pets, sites) and **time** (engagement window). The policy check is a single core function, `authorize(caller, action, resource) → allow | deny(reason)`, used by every command and query and unit-tested as a matrix.
 
@@ -36,8 +38,11 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 
 ## 4.4 AI and external interfaces
 
-- Each interface has an **egress policy**. A local LLM (`LanguageModel` adapter running on the user's own machine) may see `private` data. A hosted LLM or chat platform (Discord, Slack) gets `normal` data only, and secrets never.
+- Each interface has an **egress tier**, bound to its credential ([03 §3.2](03-core-architecture.md#32-caller-context)). Integrations default to `normal`; the owner can raise one they run on their own hardware with a local model to `private`. Hosted LLMs and chat platforms (Discord, Slack) get `normal` data only, and secrets never.
+- The core's own model calls are routed by sensitivity ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)): `private` data only goes to providers on the owner's hardware, and a request never falls back to a provider that isn't allowed to see it.
 - `Context()` builds the assistant's snapshot *after* redaction for the calling interface, so redaction can't be bypassed by asking cleverly.
+- AI usage records hold token counts and costs, never prompt or reply text.
+- An edge node offers only the fixed capabilities the owner turns on. Pairing it doesn't let the cloud run commands on the owner's machine.
 - Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Medication writes through AI require the same safety checks, and can be configured to require a tap-to-confirm in the client.
 
 ## 4.5 Media privacy

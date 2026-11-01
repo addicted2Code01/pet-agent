@@ -1,6 +1,6 @@
 # Pawsitter product spec
 
-Status: **draft 0.1**. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
+Status: **draft 0.2**. Decided: households first, cloud first with configurable placement, pluggable AI with metered hosted usage. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
 
 ## What we're building
 
@@ -29,6 +29,8 @@ These come straight from lessons learned building the hackathon prototype.
 5. **Privacy by default.** Access is scoped to sites and pets and limited in time. Secrets such as door codes are encrypted, revealed only to authorized people, and every reveal is logged. Location metadata (EXIF GPS) is stripped from uploaded photos. Interfaces such as AI get the minimum data needed.
 6. **Everything that happens is an event.** An append-only activity log gives audit trails, visit reports, notifications, sync and analytics from one source.
 7. **Offline-friendly identity.** IDs are client-generatable UUIDv7s, and records carry versions, so a sitter's phone can work offline and sync later.
+8. **Placement is configuration.** Anything behind a port (the model, vision, media files, encryption keys) can run in the cloud or on the owner's own hardware, chosen per account and routed by data sensitivity. Each account's structured data has exactly one home.
+9. **AI is metered and never load-bearing.** Every hosted model call goes through one gateway in the core and counts against the account's allotment. Running out pauses chat and generated prose, never care tasks or medication answers.
 
 ## Glossary
 
@@ -51,3 +53,7 @@ These come straight from lessons learned building the hackathon prototype.
 | **Task** | One occurrence of a routine, due at a specific time, with a status. |
 | **Knowledge entry** | Free-text instructions or notes attached to any subject, for example "Sonic hides under the bed when nervous". |
 | **Secret** | Sensitive knowledge with stricter access: door codes, alarm codes, Wi-Fi passwords. |
+| **Capability** | Something the core gets from outside through a port: a language model, vision, media storage, encryption keys. |
+| **Edge node** | A small program on the owner's own machine that offers chosen capabilities to the cloud over an outbound connection. |
+| **Allotment** | How much hosted AI an account may use per billing period, measured in credits, plus any extra limits. |
+| **Credit** | The unit an allotment is measured in. Per-model rates decide whether credits track tokens, provider cost or a blend. |
