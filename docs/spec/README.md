@@ -17,6 +17,7 @@ At its heart is a **core** that knows nothing about AI, chat, MCP, Discord or an
 | 3 | [Core architecture](03-core-architecture.md) | Commands, queries, events, ports and adapters |
 | 4 | [Permissions & privacy](04-permissions-privacy.md) | Roles, time-boxed access, secrets, sensitive data |
 | 5 | [Open questions](05-open-questions.md) | Decisions needed before building |
+| 6 | [Feature research](06-feature-research.md) | What customers value in existing apps; features ranked for us |
 
 ## Design principles
 
