@@ -36,7 +36,7 @@ Every command and query carries a `CallerContext`:
 CallerContext {
   account_id
   actor: Actor            # user / guest / system / integration, + on_behalf_of
-  interface: "web" | "mobile" | "guest_link" | "api" | "assistant" | "mcp" | "discord" | ...
+  interface: "web" | "mobile" | "guest_link" | "api" | "assistant" | "mcp" | "sms" | "whatsapp" | "discord" | ...
   egress_tier: "normal" | "private"   # the most sensitive data this interface may receive
   now: Instant            # from the Clock port at the edge, so a request is evaluated at one instant
   locale, request_id
@@ -49,7 +49,7 @@ The policy layer uses `actor`, `interface` and `egress_tier` to decide access an
 
 ## 3.3 Commands (writes)
 
-Each command validates input, checks policy, enforces invariants, writes through the `UnitOfWork`, and emits events, all atomically. Commands are idempotent when given a client `command_id` (safe retries and offline sync).
+Each command validates input, checks policy, enforces invariants, writes through the `UnitOfWork`, and emits events, all atomically. Commands are idempotent when given a client `command_id` (safe retries and offline sync). A command that changes an existing record carries the `expected_version` it started from; a mismatch is a conflict, never a silent overwrite. Every write stores a revision ([02 §2.1](02-domain-model.md#versions--history)).
 
 | Area | Commands |
 |---|---|
@@ -62,7 +62,9 @@ Each command validates input, checks policy, enforces invariants, writes through
 | Care | `CreateRoutine`, `UpdateRoutine`, `PauseRoutine`, `CompleteTask`, `SkipTask`, `SnoozeTask`, `UndoTaskCompletion` (time-limited), `AnswerReminder` (Taken / Snooze / Skip from a notification; becomes `RecordAdministration`, `CompleteTask`, `SnoozeTask` or `SkipTask`) |
 | Setup | `ApplyTemplate`, `ImportCareNote`, `AcceptDraft`, `EditDraft`, `RejectDraft` |
 | Notifications | `SetNotificationPreferences` |
-| Care threads | `PostMessage`, `CorrectAnswer` (a reply that flags an answer as wrong), `ResolveCorrection` (applied or dismissed), `SetThreadNotifications` |
+| Care threads | `PostMessage` (from any channel), `EditMessage` (people's messages only; a new revision), `CorrectAnswer` (a reply that flags an answer as wrong), `ResolveCorrection` (applied or dismissed), `SetThreadNotifications` |
+| Channels | `SetTripChannels` (which channels a trip allows), `LinkChannelIdentity` (verify with a one-time code), `RevokeChannelIdentity`, `BindThreadChannel`, `UnbindThreadChannel` |
+| History | `RestoreRevision` (writes a new revision with old values), `MarkEnteredInError` (a dose, sighting, completion or stock transaction, with a reason) |
 | Knowledge | `CreateKnowledgeEntry`, `ReviseKnowledgeEntry`, `ArchiveKnowledgeEntry`, `CreateSecret`, `RotateSecret`, `RevealSecret` (a command, because it's logged) |
 | Contacts | `CreateContact`, `UpdateContact`, `LinkContact`, `UnlinkContact` |
 | Media | `BeginUpload` → `CompleteUpload` (strips metadata, makes variants), `LinkMedia`, `UnlinkMedia` |
@@ -93,9 +95,13 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
 | `AiUsage(scope, period)` | Used and remaining for the credit balance and each limit; breakdown by member, purpose and model; reset time; projected run-out date. |
 | `Readiness(engagement_id)` | Whether the trip is ready: sitter link sent and opened; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). |
-| `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: open owner corrections word for word, first; then the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge. This is the generalized "send everything in the prompt" from the prototype. |
-| `Thread(engagement_id, since?)` | The care thread: messages with their sources and statuses, open corrections pinned first. |
+| `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: open owner corrections word for word, first; then the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge, and the recent care thread from every channel. This is the generalized "send everything in the prompt" from the prototype. |
+| `Thread(thread_id, since?)` | The care thread merged across channels: messages with their sources, statuses and channel, open corrections pinned first. |
+| `Inbox(viewer)` | Every thread the viewer may see (each trip's, the household's, their own direct chat), across all channels, with unread counts and open corrections. The owner's view of everything. |
+| `Timeline(scope = trip / pet, viewer)` | One stream merging messages from every channel with events (doses, tasks, incidents, moves), each tagged with where it came from, filtered by what the viewer may see. |
 | `OpenCorrections(scope)` | Corrections not yet applied or dismissed, with their drafts. |
+| `History(subject_id)` | Every revision of a record: what changed, who changed it, when, why, through which channel, and what prompted it (a draft, a correction, an import). |
+| `ExplainAnswer(message_id)` | Replays an assistant answer as of its `as_of`: the records exactly as they were, the computed results it quoted, and what has changed since. |
 
 ## 3.5 Events
 
@@ -136,7 +142,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `BlobStore` | Put/get/delete media; signed URLs | S3-compatible, local disk |
 | `Crypto` | Envelope encryption for secrets; key rotation | Cloud KMS, local keyfile |
 | `Identity` | Verify sign-in, map to `User` | OIDC, passkeys, magic links |
-| `Notifier` | Deliver a message on a channel and report delivery receipts | Push (APNs/FCM), web push, email, SMS, Discord, Slack |
+| `Notifier` | Deliver a message on a channel and report delivery receipts and the channel's message id | Push (APNs/FCM), web push, email, SMS, WhatsApp, Discord, Slack |
 | `EventPublisher` | Publish committed events | In-process bus, queue, webhooks |
 | `JobScheduler` | Run recurring and one-off jobs | Cron in-process, queue workers |
 | `SearchIndex` | Full-text + fuzzy name/alias search | SQLite FTS5, Postgres full-text, Meilisearch |
@@ -185,14 +191,34 @@ The assistant has no memory of its own. What it "knows" is the household's recor
 2. **Pin.** Until the correction is resolved, the owner's words are pinned at the top of the sitter's view, on the task they concern, and first in every assistant context for that scope (invariant 19). The assistant must show them with any computed answer they concern, and never contradict them.
 3. **Re-answer.** The assistant posts an updated answer that quotes the owner: "Jane says she gave Cerenia at 7:00. Don't give it now."
 4. **Draft the fix.** The assistant proposes the matching change as a `Draft` linked to the correction: here, `record` an administration of Cerenia at 07:00 by Jane. Other corrections become other drafts: revise a medication order, skip a task, move an item, revise a knowledge entry.
-5. **Apply.** The owner applies it with one tap. It runs through the normal command (`RecordAdministration`, `ReviseMedicationOrder`, …) with the owner's permissions and every safety check. `CanAdminister` now says "not until 07:00 tomorrow", the correction is resolved, and the pin comes down.
+5. **Apply.** The owner applies it with one tap. It runs through the normal command (`RecordAdministration`, `ReviseMedicationOrder`, …) with the owner's permissions, every safety check, and the draft's `base_version` as `expected_version`. The new revision records the correction as its cause. `CanAdminister` now says "not until 07:00 tomorrow", the correction is resolved, and the pin comes down.
 
 Rules:
 - **The assistant never applies a correction itself.** It only drafts; a person allowed to make the change applies it (principle 11). An unapplied correction stays pinned, so the owner's words keep governing the sitter's view even if nobody taps Apply.
 - **Even cautious corrections are drafts.** "Don't give it" never becomes an automatic hold: if the assistant misread "give it with food" as "don't give it", a hold could block a dose that matters. The owner's words are pinned instead.
 - **Anyone in the thread can correct the assistant**, including the sitter ("The leash isn't in the basket"). Who can apply the resulting draft follows normal permissions: a sitter can record where an item is, but medication changes need the owner or family.
 - **If the sitter already acted** on the answer, the logged dose appears in the thread next to the correction, so the owner sees it at once and can follow the medication's instructions or call the vet.
-- **Corrections are measured.** How often answers get corrected is an AI quality measure ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)). Finding the cause (stale records, or a wrong answer from correct records) means reading the conversation, which needs the owner's permission.
+- **Corrections respect versions.** A draft is made against the record's current version. If the record changes before the owner applies it (an edit on the website, say), the draft goes stale and the assistant re-drafts against the new version. If a later edit already covers the correction, the owner is asked whether to resolve it.
+- **Wrong facts are marked, not erased.** If the correction is that something recorded never happened ("he didn't get his 8:00 dose; I logged it by mistake"), the draft marks that record `entered_in_error`. The history keeps both what was believed and what was true.
+- **Corrections are measured, and classified without reading the conversation.** How often answers get corrected is an AI quality measure ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)). Replaying the corrected answer with the records as they are now (`ExplainAnswer`) separates the causes: if the replayed answer changes, the records were missing or wrong; if it doesn't, the answer itself was wrong. Reading the conversation still needs the owner's permission.
+
+### 3.8.3 One thread, many channels
+
+A trip has one care thread, but people reach it in different ways: the owner in the app or on Discord, the sitter through their link, by text or on WhatsApp. Channel adapters are both driving (inbound messages become `PostMessage` commands) and driven (outbound copies go through the `Notifier` port). Which channels a trip allows is the owner's choice (`SetTripChannels`).
+
+**Inbound.**
+1. The adapter receives a message (a WhatsApp webhook, a Discord event, an incoming SMS) and looks up the sender's `ChannelIdentity`. An unknown or unverified sender gets a link to verify, and learns nothing about the household.
+2. It finds the thread through the `ChannelBinding` and posts the message with its `channel`, `external_message_id` and the channel's timestamp. A repeated delivery with the same external id is dropped (invariant 23).
+3. If the channel has native replies (a WhatsApp quote, a Discord reply), `reply_to_id` comes from the channel's message id through the delivery records. Otherwise the message is matched to the latest assistant answer sent to that person; if that's ambiguous, the assistant asks which answer is meant.
+4. The message acts with the person's permissions and the channel's egress tier. Outside platforms are `normal` and never receive secrets.
+
+**Outbound.**
+- Each message is stored once and delivered to each participant on their chosen channels, as one `NotificationDelivery` per copy carrying the channel's message id.
+- The assistant answers on the channel where it was asked. Other participants get the answer according to the thread's notification policy (Q22).
+- Each channel renders the same message its own way. Discord and WhatsApp show an "Apply" button on a draft; SMS gets plain text with a short link that opens the draft in the app after sign-in.
+- Channel rules belong in the adapter: WhatsApp's 24-hour reply window and approved message templates, SMS opt-out ("STOP"), Discord rate limits. Paid channels (SMS, WhatsApp) are metered like AI usage (§3.10).
+
+**The combined view.** `Thread`, `Timeline` and `Inbox` merge every channel into one stream, ordered by when the core received each message, with a badge showing where each came from. Both sides see the same conversation: the owner sees everything, and the sitter sees the whole trip thread, including what the owner sent from Discord, on whichever channel they use. Because `Context()` includes the merged thread, the assistant answering on WhatsApp knows what the owner said on Discord.
 
 The **MCP server** is the same tool set exposed over MCP, so any MCP-capable client gets exactly the same safe behavior. Chat bots are thin adapters on top of the assistant.
 
@@ -268,7 +294,7 @@ So that moving a part later is configuration, not a rewrite:
 4. Every port request carries the sensitivity of its data.
 5. References to media and keys are opaque and location-independent (`storage_key` and `key_id` include the provider), so moving a file between stores doesn't change domain records.
 6. An interface's identity and egress tier come from its credential, never from what it claims (§3.2).
-7. Records are sync-ready: client-generated UUIDv7 ids, a `version` on every row, idempotent commands with a `command_id`, and the event log as the replication stream. This keeps the self-hosted edition and hybrid sync possible.
+7. Records are sync-ready: client-generated UUIDv7 ids, a `version` on every row with every revision kept, `expected_version` on edits, idempotent commands with a `command_id`, and the event log as the replication stream. This keeps the self-hosted edition and hybrid sync possible.
 
 ### 3.9.6 Shapes over time
 

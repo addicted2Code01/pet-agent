@@ -70,7 +70,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 
 - **Export**: all of an account's data as JSON + media, from the core's own model.
 - **Deletion**: account deletion soft-deletes immediately, revokes all access, and hard-deletes after a short recovery period. Secrets and keys are destroyed first.
-- **Retention**: event log and administrations kept for the account's lifetime (medical history); secret-reveal logs kept for at least 1 year.
+- **Retention**: event log and administrations kept for the account's lifetime (medical history); secret-reveal logs kept for at least 1 year. Record revisions are kept for the account's lifetime too, so any answer can be explained later; secret values are the exception and are destroyed on rotation ([02 §2.1](02-domain-model.md#versions--history)).
 
 ## 4.7 Disclaimers & safety
 
@@ -93,3 +93,7 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 - **Everything in a thread is `normal` data**, because the caregiver can read it. Hosted models may receive it under the usual egress rules, and the owner should not post private details there.
 - **No secrets in threads.** The assistant never posts secret values; when asked, it points to the reveal button. If anyone types something that looks like a code or password, the app offers to save it as a secret instead and masks it before any hosted model sees it.
 - **Outside engagements, a member's assistant chats are private to them.** A shared household thread is V2.
+- **Channels are opt-in.** The owner chooses which channels a trip allows (app, web, SMS, WhatsApp, Discord, …), and each person links their own account on a channel with a one-time code sent through it. Messages from unlinked accounts are never accepted, and the sender learns nothing about the household.
+- **Private conversations only.** A thread can be carried by a direct message or a private thread containing exactly its participants, never a group channel where others could read it.
+- **Copies on other platforms.** Messages sent through SMS, WhatsApp or Discord also live on those platforms. Deleting a thread in Pawsitter can't delete those copies; the owner is told so when enabling a channel.
+- **Consent.** SMS and WhatsApp need the recipient's opt-in, and replying "STOP" always works.

@@ -107,7 +107,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | Knowledge entries on any subject (account, site, place, pet, item, medication order) | MVP | Categorized; with photos. |
 | Sensitivity levels: normal, private (owner/family only), secret (encrypted, access-logged) | MVP | |
-| Version history on knowledge | MVP | Who changed instructions and when. |
+| Version history on knowledge | MVP | Who changed instructions and when. Every other record has history too (1.10). |
 | What's normal for this pet: baseline quirks (hairballs, limping after naps) so a sitter can tell normal from worrying | MVP | Knowledge of kind `baseline`. 06 #5. |
 | Contacts: vets, emergency vet, owner, neighbors, groomer, walker | MVP | With roles, linked pets and sites, and tap-to-call. |
 | **Emergency card**: vets, emergency vet, owner contacts, critical notes, active medications and vet authorization on one screen | MVP | 06 #5. |
@@ -127,7 +127,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Reminders for sitters without the app: SMS for medications, email or web push for the rest | MVP | SMS is metered like AI ([03 §3.10](03-core-architecture.md#310-ai-usage-metering)). |
 | **Discreet notifications**: hide medication names on the lock screen | MVP | 06 #24. |
 | Notification preferences: channels, quiet hours, discreet mode | MVP | Medication reminders can be set to override quiet hours. |
-| Chat-app notifications (Discord, Slack, Telegram) | V2 | Each an adapter with its own privacy review. |
+| Notifications on WhatsApp and Discord | V2 | The same channels as the care thread (1.14). Slack and Telegram later. |
 | Export (PDF care sheet, CSV) | V2 | The printable care sheet is MVP (1.7). |
 
 ## 1.9 Interfaces (adapters, not core)
@@ -141,7 +141,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Read-only offline copy of the care guide and emergency card on the sitter's phone; task completions queue while offline | MVP | Expires with access and holds no codes. Full offline editing V2 (Q14). 06 #19. |
 | AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Grounded in the household's data ("where's the leash?", "can I give it now?") plus setup help; no diagnosis. Its answers to sitters appear in the care thread, where the owner can correct them (1.14). 06 #21. |
 | MCP server exposing core queries/commands as tools | V2 | Can run on the owner's own machine against the cloud API; adds no model cost. |
-| Chat bots (Discord, Slack, Telegram, SMS) | Later | Each is an adapter with its own privacy review. |
+| Chat channels for the care thread and the assistant: WhatsApp, Discord | V2 | Two-way SMS is MVP (1.14). Slack and Telegram later. Each channel gets its own privacy review. |
 | Voice (smart speaker) | Later | |
 
 ## 1.10 Platform
@@ -149,6 +149,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Feature | Priority | Notes |
 |---|---|---|
 | **Notification delivery monitoring**: track every reminder from sent to answered; fall back to another channel and alert us when delivery degrades | MVP | Reliability is the product (principle 10 in the [README](README.md)). 06 #1. |
+| **Record history**: every change to any record is kept with who, when, why and through which channel; any version can be restored; wrong facts are marked as errors, never erased | MVP | Edits check the version they started from, so nothing is silently overwritten ([02 §2.1](02-domain-model.md#versions--history)). |
 | Audit log of sensitive reads (secrets, label photos) | MVP | |
 | Data export and account deletion | MVP | Privacy law and trust. |
 | Backups and point-in-time restore | MVP | |
@@ -199,7 +200,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 
 ## 1.14 Care thread & AI oversight
 
-The owner sees everything the AI tells the sitter, and can correct it in the same stream. Corrections fix the records, so every interface gives the corrected answer, not just the AI ([03 §3.8.2](03-core-architecture.md#382-owner-corrections)).
+The owner sees everything the AI tells the sitter, and can correct it in the same stream, whichever channels each of them uses. Corrections fix the records, so every interface gives the corrected answer, not just the AI ([03 §3.8.2](03-core-architecture.md#382-owner-corrections), [§3.8.3](03-core-architecture.md#383-one-thread-many-channels)).
 
 | Feature | Priority | Notes |
 |---|---|---|
@@ -211,6 +212,11 @@ The owner sees everything the AI tells the sitter, and can correct it in the sam
 | **Corrections update the plan**: the AI drafts the matching change (record a dose already given, revise a medication, skip a task, move an item, edit a note) and the owner applies it with one tap | MVP | The AI never changes records itself (principle 11). Once applied, the checklist, can-I-give-it and the care sheet all agree. |
 | Anyone in the thread can correct the AI, including the sitter ("the leash isn't in the basket") | MVP | Applying the change follows normal permissions: a sitter can record where an item is; medication changes need the owner or family. |
 | Owner notified at once of AI answers about medication, health or incidents; other answers appear in the thread and the daily report | MVP | Per trip, the owner can switch to "notify me of every answer" (Q22). |
-| How often answers get corrected, tracked as an AI quality measure | MVP | Counts only; reading a conversation to find the cause needs the owner's permission. |
+| **One thread, every channel**: messages from the app, the website, the sitter link, SMS, WhatsApp, Discord and others combine into the trip's thread, each marked with where it came from | MVP | The model is channel-independent from day one. MVP channels: app, web, sitter link and two-way SMS; WhatsApp and Discord in V2 (Q24). |
+| Each person chooses their channels and gets the whole thread there: a sitter on WhatsApp sees the owner's reply from Discord | MVP | One message, many deliveries; never duplicated. |
+| Correct from any channel: a native reply (a WhatsApp quote, a Discord reply) targets that answer; on SMS the latest answer is assumed, or the AI asks which | MVP | |
+| **Combined views**: the owner's inbox across all threads and channels, and a timeline per trip or pet merging the conversation with events | MVP | Owner and sitter each see everything they're allowed to. |
+| ★ **"Why did it say that?"**: replay any AI answer with the records exactly as they were when it answered, and see what has changed since | MVP | Possible because every record keeps its history ([02 §2.1](02-domain-model.md#versions--history)). |
+| How often answers get corrected, tracked as an AI quality measure | MVP | Replaying a corrected answer shows whether the records or the answer were wrong, without reading the conversation. |
 | Review mode: hold the AI's medication answers until the owner approves them | V2 | For a new sitter or a risky medication (Q23). |
 | A household thread for family outside trips | V2 | Members' own AI chats stay private by default ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |

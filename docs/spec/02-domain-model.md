@@ -12,14 +12,26 @@ Every entity has:
 | `account_id` | UUID | The tenant. Every query is scoped by it; no cross-account joins except through explicit sharing. |
 | `created_at`, `updated_at` | instant (UTC) | |
 | `created_by`, `updated_by` | actor ref | A user, the system, or an integration (see `Actor` below). |
-| `version` | int | Optimistic concurrency and sync. Incremented on every write. |
-| `deleted_at?` | instant | Soft delete; hard-deleted by a retention job or account deletion. |
+| `version` | int | Increments on every write. Each version of a versioned entity is kept as a `Revision` (below). Used for optimistic concurrency and sync. |
+| `deleted_at?` | instant | Soft delete, itself a revision; hard-deleted only by account deletion. |
 
 Other conventions:
 - **Instants** are UTC. **Local times** (for example `08:00` in a routine) are interpreted in a site's IANA `time_zone`.
 - **Quantities** are `{amount: decimal, unit: string}` with units from a fixed list (`count`, `tablet`, `capsule`, `ml`, `g`, `kg`, `cup`, `can`, `click`, `roll`, `bag`…).
 - **Durations** are ISO 8601 (`PT8H`).
 - **Names** have `aliases: string[]` wherever people search by name ("ear medicine" for Methimazole, "the hedgehog" for a toy).
+
+### Versions & history
+
+Records change all the time: owners edit instructions, sitters log doses, corrections fix mistakes. Any answer must be explainable afterwards ("why did it say to give Cerenia at 08:05?"), so history is never rewritten.
+
+- **Every write makes a revision.** Every versioned entity keeps an immutable **`Revision`** per write: `{entity_id, version, snapshot, effective_from?, recorded_at, recorded_by (Actor), interface, command_id, reason?, cause?}`. Versioned entities are everything in the subject registry (2.2) plus knowledge entries, engagements, tasks, secrets and messages. `cause` links what prompted the change: a draft, a correction, an import. The current row is a projection of the latest revision in effect. `MedicationOrderRevision` (2.8) and `KnowledgeRevision` (2.10) follow this pattern with typed snapshots.
+- **Two time axes.** *Effective time* is when something is true in the world: a revision's `effective_from`, a dose's `administered_at`, a sighting's `observed_at`. *Recorded time* is when the system learned it: `recorded_at`, set by the core from the clock port and never edited. A dose given at 07:00 and reported at 08:12 carries both.
+- **As-of reads.** Any query can be evaluated as of a recorded time ("what did the system know at 08:05?") and at an effective time ("what was the schedule on Monday?"). Because the core is deterministic and takes `now` from the clock port, an assistant answer can be replayed exactly (2.17).
+- **Facts are corrected, not edited.** Doses, sightings, task completions and stock transactions are append-only. A mistaken one is marked `entered_in_error` (who, when, why, and the correction that prompted it); computations ignore it from then on, and the right fact is recorded as a new record. Nothing disappears, so the log shows both what happened and what was believed at the time.
+- **Edits start from a known version.** Every command that changes an existing record carries `expected_version`. If the record has changed in the meantime, the command fails with a conflict instead of overwriting. Drafts carry a `base_version` and go `stale` the same way (2.16).
+- **Restoring is a new revision.** Going back to an older version writes a new revision with the old values, so history only grows.
+- **Exceptions.** Secret values aren't kept in history: rotation destroys the old ciphertext, and only metadata revisions (who changed it, when) remain. Account deletion removes history along with everything else.
 
 ## 2.2 The subject registry
 
@@ -90,6 +102,10 @@ erDiagram
     ENGAGEMENT ||--o| THREAD : "discussed in"
     THREAD ||--o{ MESSAGE : contains
     MESSAGE ||--o{ DRAFT : proposes
+    THREAD ||--o{ CHANNEL_BINDING : "carried on"
+    CHANNEL_BINDING }o--o{ CHANNEL_IDENTITY : includes
+    MESSAGE ||--o{ NOTIFICATION_DELIVERY : "delivered as"
+    SUBJECT ||--o{ REVISION : "history"
 ```
 
 ## 2.4 Identity, tenancy & access
@@ -227,7 +243,7 @@ Pets and items share location tracking, aliases and photos, so both specialize a
 | `expires_on?` | date | V2. |
 | `sensitivity` | enum | `normal` · `private` (e.g. prescription bottles: labels show name and address) |
 
-**`Placement`**: where a trackable is or was. Append-mostly history.
+**`Placement`**: where a trackable is or was. Append-only history; a wrong sighting is marked `entered_in_error`, not deleted (2.1).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -265,7 +281,8 @@ Why both `home_place_id` and `Placement`: people ask both "where does it go?" an
 |---|---|---|
 | `item_id`, `place_id` | refs | |
 | `delta` | Quantity | Negative for use. |
-| `reason` | enum | `restock` · `consumed` · `count_adjustment` · `transfer_in` · `transfer_out` · `expired` · `lost` |
+| `reason` | enum | `restock` · `consumed` · `count_adjustment` · `transfer_in` · `transfer_out` · `expired` · `lost` · `reversal` |
+| `reverses_id?` | StockTransaction | For `reversal`: the mistaken transaction it cancels. Transactions are never edited or deleted. |
 | `task_id?`, `administration_id?` | refs | Auto-consumption from feeding tasks or doses (V2). |
 | `occurred_at` | instant | |
 
@@ -303,7 +320,7 @@ Safety-critical, so fully structured. The owner's own words are kept alongside t
 | `prescriber_contact_id?` | Contact | |
 | `status` | enum | `active` · `paused` · `completed` · `discontinued` |
 
-Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (`order_id`, snapshot, `effective_from`, `changed_by`, `changed_at`, `reason`). A revision can take effect in the future, so a taper ("½ tablet from Monday, ¼ from the 20th") is a series of dated revisions. Administrations reference the revision in force at the time of the dose, and `can_administer` uses it.
+Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (`order_id`, snapshot, `effective_from`, `changed_by`, `changed_at`, `reason`), the general `Revision` (2.1) with `changed_at` as its recorded time. A revision can take effect in the future, so a taper ("½ tablet from Monday, ¼ from the 20th") is a series of dated revisions. Administrations reference the revision in force at the time of the dose, and `can_administer` uses it.
 
 **`Administration`**
 
@@ -316,6 +333,7 @@ Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (
 | `administered_at` | instant | When it actually happened (may be back-dated, with `recorded_at` kept separately). |
 | `recorded_at`, `recorded_by` | | |
 | `note?`, `media_id?` | | |
+| `entered_in_error?` | `{at, by, reason, correction_id?}` | Set instead of deleting a mistaken record. `can_administer` ignores it from then on; the history keeps it. |
 
 **Derived, never stored by an LLM**: `can_administer(order, at)` returns `{allowed, reason, next_allowed_at, last_given_at, doses_in_window}` from the order revision, `not_before`, `min_interval`, `max_doses_per_window` and the administrations. Statuses `vomited_after` and `spat_out` still count as given for safety limits unless the order says otherwise.
 
@@ -527,17 +545,18 @@ Reminders that fire reliably are the most valued feature in the category ([06 #1
 
 | Field | Type | Notes |
 |---|---|---|
-| `channels` | set | `push` · `email` · `sms` · `web_push`, in order of preference |
+| `channels` | list | In order of preference: `push` · `web_push` · `email` · `sms`, plus any outside channel enabled for the account (`whatsapp`, `discord`, …). |
 | `quiet_hours?` | `{from, to}` local times | |
 | `medication_overrides_quiet_hours` | bool | Default true. |
 | `discreet` | bool | Keep medication names and health details off lock screens and out of SMS text; show the routine's title instead. |
 
-**`NotificationDelivery`**: one row per message.
+**`NotificationDelivery`**: one copy of something sent to one recipient on one channel: a reminder, an alert, or a care-thread message fanned out to a participant (2.17).
 
 | Field | Type | Notes |
 |---|---|---|
 | `recipient` | User or GuestLink | Guest sitters have no app: medication reminders go by SMS, the rest by email or web push. |
-| `channel` | enum | `push` · `email` · `sms` · `web_push` |
+| `channel` | enum | `push` · `web_push` · `email` · `sms` · `whatsapp` · `discord` · … |
+| `message_id?`, `external_message_id?` | | For care-thread copies: the message, and its id on the channel, so a reply there maps back to it. |
 | `kind` | enum | `reminder` · `escalation` · `dose_alert` · `incident` · `update` · `report` · `readiness` · `thread` · `correction` |
 | `task_id?`, `subject_ids[]` | refs | |
 | `sent_at`, `delivered_at?`, `opened_at?`, `answered_at?` | instant | Receipts where the channel provides them. |
@@ -562,37 +581,65 @@ Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranke
 | `action` | enum | `create` · `revise` (change an existing record) · `record` (log something that happened, such as a dose given before the owner left) |
 | `target_type` | enum | `care_routine` · `medication_order` · `administration` · `task` · `placement` · `contact` · `place` · `item` · `knowledge_entry` · `secret` |
 | `target_id?` | ref | The record a `revise` changes. |
+| `base_version?` | int | The target's version when the draft was made. If the target has changed since, the draft goes `stale` and is re-drafted against the new version. |
 | `proposed` | object | Field values, validated against the target's schema. |
 | `source_excerpt?` | text | The words it came from. For a new medication order this becomes `instructions_verbatim`; for a correction it's the owner's message. |
-| `status` | enum | `pending` · `accepted` · `edited_and_accepted` · `rejected` |
+| `status` | enum | `pending` · `accepted` · `edited_and_accepted` · `rejected` · `stale` |
 | `decided_by?`, `decided_at?` | | |
 
-## 2.17 Care threads
+## 2.17 Care threads & channels
 
-Every answer the assistant gives a caregiver during an engagement lives in a thread the owner can see and correct ([01 §1.14](01-features.md#114-care-thread--ai-oversight), [03 §3.8.2](03-core-architecture.md#382-owner-corrections)).
+Every answer the assistant gives a caregiver during an engagement lives in a thread the owner can see and correct ([01 §1.14](01-features.md#114-care-thread--ai-oversight), [03 §3.8.2](03-core-architecture.md#382-owner-corrections)). People reach that thread on different channels: the app, the website, the sitter link, SMS, WhatsApp, Discord. It stays one conversation however many channels carry it ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)).
 
-**`Thread`**: one per engagement. A household thread outside engagements is V2.
+**`Thread`**: a conversation, independent of any channel.
 
 | Field | Type | Notes |
 |---|---|---|
-| `engagement_id?` | Engagement | |
-| `participants` | refs | Owner, family, and the caregiver or guest link. The assistant posts as itself. |
+| `scope` | enum | `engagement` (one per trip, shared with everyone on it) · `household` (family, outside trips; V2) · `direct` (one member and the assistant; private to them) |
+| `engagement_id?` | Engagement | For `engagement` threads. |
+| `participants` | refs | Users and guest links. The assistant posts as itself. |
 | `notify_policy` | enum | `important` (medication, health and incidents notify the owner at once; the default) · `every_answer` |
 
-**`Message`**
+**`ChannelIdentity`**: an account on an outside channel, verified as a particular person in this household's account.
+
+| Field | Type | Notes |
+|---|---|---|
+| `channel` | enum | `sms` · `whatsapp` · `discord` · `slack` · `telegram` · `email` · … |
+| `external_user_id` | string | A phone number, a WhatsApp id, a Discord user id. Unique per channel within the account. |
+| `user_id?`, `guest_link_id?` | refs | Who it is. |
+| `verified_at`, `verified_by` | | Verified with a one-time code sent through that channel, or linked by the owner. |
+| `revoked_at?` | instant | |
+
+**`ChannelBinding`**: one outside conversation that carries a thread. In-app, web and sitter-link conversations need none, because those channels are ours.
+
+| Field | Type | Notes |
+|---|---|---|
+| `thread_id` | Thread | |
+| `channel` | enum | |
+| `external_conversation_id` | string | A WhatsApp chat, a Discord DM or private thread, an SMS number pair. |
+| `identity_ids[]` | ChannelIdentity | Who is in it: participants of the thread and nobody else ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
+| `status` | enum | `active` · `paused` · `closed` (closes with the engagement) |
+
+**`Message`**: stored once, however many channels deliver it.
 
 | Field | Type | Notes |
 |---|---|---|
 | `thread_id` | Thread | |
 | `author` | Actor | A user, a guest, the assistant, or `system` for inline events. |
+| `channel` | enum | Where it was written: `app` · `web` · `guest_link` · `sms` · `whatsapp` · `discord` · … |
+| `external_message_id?` | string | The channel's id for an inbound message. Unique per channel, so a repeated delivery is dropped. |
+| `sent_at?`, `received_at` | instant | The channel's timestamp, and when the core received it. Threads are ordered by `received_at`. |
 | `kind` | enum | `question` · `answer` · `reply` · `correction` · `event` (a dose logged, an incident) · `system` |
-| `body` | text | Stored as written. Text that looks like a code or password is offered as a secret instead ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
-| `reply_to_id?` | Message | |
-| `sources[]` | `{subject_id, version}` | For assistant answers: the records it used and their versions at the time, shown as "Based on: Cerenia schedule, updated Oct 30". |
+| `body` | text | As written. People's edits are new revisions, shown as "edited"; assistant answers are never edited. Text that looks like a code or password is offered as a secret instead ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
+| `reply_to_id?` | Message | From the channel's native reply when it has one (a WhatsApp quote, a Discord reply); otherwise inferred ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)). |
+| `sources[]` | `{subject_id, version}` | For assistant answers: the record revisions it used, shown as "Based on: Cerenia schedule, updated Oct 30". |
+| `as_of` | instant | For assistant answers: the instant it was computed at. Replaying uses it as both `now` and the recorded-time cutoff, so `ExplainAnswer` shows exactly what the assistant saw (2.1). |
 | `topics` | set | `medication` · `health` · `incident` · `location` · `routine` · `other`. Drives notifications. |
 | `status` | enum | `active` · `corrected` (someone corrected it) · `superseded` (an updated answer replaced it) |
 | `corrected_by_id?` | Message | The correction that flagged it. |
 | `resolution?` | enum | For corrections: `open` · `applied` (its drafts were accepted) · `dismissed` · `expired` (the engagement ended). A correction is pinned while `open`. |
+
+Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying the channel's message id, so a reply on any channel maps back to the message it answers.
 
 ## 2.18 Invariants (enforced by the core)
 
@@ -615,6 +662,10 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 17. During an engagement, every assistant answer to a caregiver is stored in that engagement's thread, is visible to the owner, and can't be edited or deleted while the engagement is active.
 18. A correction changes records only through drafts applied by someone allowed to make that change, using the same commands and safety checks as any other edit.
 19. An open correction is included in every assistant context for its scope, ahead of everything else, and shown word for word with any computed answer it concerns.
+20. History is never rewritten. Every write to a versioned entity is a new revision, and a mistaken fact is marked `entered_in_error` and kept.
+21. A command that changes an existing record applies only if its `expected_version` matches the record's current version; otherwise it fails with a conflict.
+22. Messages from an outside channel are accepted only from a verified, unrevoked `ChannelIdentity`, and act with that person's permissions and the channel's egress tier.
+23. A message exists once, however many channels deliver it, and the same inbound message (`channel`, `external_message_id`) is never stored twice.
 
 ## 2.19 Mapping from the prototype
 

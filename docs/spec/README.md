@@ -1,6 +1,6 @@
 # Pawsitter product spec
 
-Status: **draft 0.4**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); and owner oversight of every AI answer given to a sitter, through the care thread. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
+Status: **draft 0.5**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); owner oversight of every AI answer given to a sitter, through a care thread that combines every channel; and full version history on every record. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
 
 ## What we're building
 
@@ -37,6 +37,7 @@ These come straight from lessons learned building the hackathon prototype.
 9. **AI is metered and never load-bearing.** Every hosted model call goes through one gateway in the core and counts against the account's allotment. Running out pauses chat and generated prose, never care tasks or medication answers.
 10. **Reliability is the product.** A reminder that doesn't fire or a log entry that disappears breaks trust faster than any missing feature; both show up in the category's worst reviews. Delivery is tracked from sent to answered, failures fall back to another channel, and drops in delivery alert us.
 11. **AI drafts, people confirm.** Anything a model produces from the owner's notes enters the system as a draft. It becomes a record only when a person accepts it, and medication drafts keep the owner's exact words. Corrections work the same way: the owner's words are pinned for the sitter at once, and the matching change to the records is applied with one tap.
+12. **History is never rewritten.** Every change is a new revision recording who, when, why and through which channel. Each revision records both when something was true and when the system learned it. Wrong facts are marked as errors, not erased, and edits that started from an old version are rejected instead of overwriting. So any answer can be replayed exactly as it was given.
 
 ## Glossary
 
@@ -69,3 +70,6 @@ These come straight from lessons learned building the hackathon prototype.
 | **Report** | An update to the owner built from events: per visit, per day, or the stay summary at handback. |
 | **Care thread** | The stream for one trip where the sitter's questions, the AI's answers, the owner's replies and key events appear together. The owner sees everything in it. |
 | **Correction** | A reply in the care thread saying an answer is wrong. It's pinned for the sitter until the matching change to the records is applied or dismissed. |
+| **Revision** | One immutable version of a record: its values, when they took effect, when the system recorded them, who made the change and why. |
+| **Channel** | A way people reach a thread: the app, the website, the sitter link, SMS, WhatsApp, Discord. A message is stored once and delivered on each person's channels. |
+| **Channel identity** | A person's account on an outside channel (a phone number, a Discord user), verified with a one-time code before its messages are accepted. |

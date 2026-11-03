@@ -26,7 +26,7 @@ Five hero features that no competitor we found offers in full, plus a daily habi
 | **Everything findable** | "Where's the leash?" answered with the spot and a photo. Supplies marked low go straight onto the shopping list. | [1.4](01-features.md#14-items-supplies--inventory) |
 | **Access that ends when you're home** | A sitter link that opens and closes with the job. Door codes revealed one at a time, with a log. Vet authorization with a spending limit. | [1.1](01-features.md#11-accounts-people--access), [1.2](01-features.md#12-sites--places), [1.7](01-features.md#17-knowledge-contacts--emergencies) |
 | **Ready in 10 minutes** | Paste the note you already leave for sitters; AI drafts the setup and you confirm each entry. | [1.12](01-features.md#112-setup--onboarding) |
-| **You stay in the loop** | Every answer the AI gives your sitter appears in the trip's care thread. Reply to correct it: your words are pinned for the sitter at once, and one tap fixes the plan everywhere. | [1.14](01-features.md#114-care-thread--ai-oversight) |
+| **You stay in the loop** | Every answer the AI gives your sitter appears in the trip's care thread, whichever channel they asked on. Reply from any channel to correct it: your words are pinned for the sitter at once, and one tap fixes the plan everywhere. You can always see why it answered as it did. | [1.14](01-features.md#114-care-thread--ai-oversight) |
 
 **The everyday hook.** Sitter apps get used a few times a year, so their information goes stale. Pawsitter's reminders and shared log are useful every day ("did anyone feed the dog?"), so the family keeps it current and it's ready the moment a sitter is needed. A whole category of small apps exists only to answer that question (06 #2), which shows the demand.
 
