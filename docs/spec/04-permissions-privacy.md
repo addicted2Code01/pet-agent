@@ -16,8 +16,13 @@
 | Report incidents | ✓ | ✓ | ✓ | ✓ |
 | Read activity log | ✓ | ✓ | ✓ | their own engagement's events |
 | Read secret-reveal log | ✓ | ✓ | | |
+| Set vet authorization for an engagement | ✓ | ✓ | | |
+| See the vet authorization | ✓ | ✓ | ✓ | ✓ (their engagement) |
+| End an engagement ("I'm home") | ✓ | ✓ | ✓ | |
 | See the account's AI usage; set usage caps | ✓ | ✓ | own usage | own usage |
 | Pair edge nodes; change capability routing | ✓ | | | |
+
+A sitter on a guest link has the caregiver column's rights for that one engagement, limited to `normal` data (§4.2).
 
 Roles map to **permission sets**. Engagements and standing-caregiver memberships narrow them by **scope** (pets, sites) and **time** (engagement window). The policy check is a single core function, `authorize(caller, action, resource) → allow | deny(reason)`, used by every command and query and unit-tested as a matrix.
 
@@ -26,7 +31,14 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - A caregiver's access exists only within `[starts_at − access_lead, ends_at + access_lag]`.
 - Outside the window, a caregiver keeps their own past events (what they did) but loses access to the household's data.
 - Secrets revealed during an engagement are not cached on the caregiver's device after it ends. Clients get an expiry with every secret.
-- The owner can end access early (`CancelEngagement`), which takes effect immediately.
+- The owner can end access early with `CancelEngagement`, or by tapping "I'm home" (`EndEngagement`). Both take effect immediately.
+
+**Sitter links** (guest access without an account, Q11):
+
+- A link grants exactly its engagement's access: the same pets, sites, permissions and window. It holds a random token, and only the token's hash is stored.
+- Revealing a secret needs a one-time code sent to the phone or email the owner entered for the sitter. Verification lasts 24 hours, and every reveal is logged against the link.
+- Links never carry `private` data and can't change medication orders, routines or settings.
+- The owner sees when the link was last opened and can revoke it at once. Attempts to open links are rate-limited.
 
 ## 4.3 Sensitivity tiers
 
@@ -60,3 +72,12 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 ## 4.7 Disclaimers & safety
 
 Pawsitter is a care-coordination tool, not veterinary advice and not a medical device. `CanAdminister` enforces the *owner's own* limits; it doesn't judge whether a dose is clinically right. The UI must show the owner's verbatim instructions alongside every computed answer, and an emergency card always points to the vet and emergency vet.
+
+Vet authorization records the owner's instructions to their sitter. It isn't a legal consent form, and a clinic may ask for its own.
+
+## 4.8 Printing, offline copies, notifications and import
+
+- The printable care sheet never includes secret values; it says where to find them in the app. `private` data is printed only if the owner opts in for that print.
+- The sitter's offline copy holds no secrets and expires with access: the app refuses to show it afterwards.
+- Discreet mode keeps medication names and health details off lock screens and out of SMS text.
+- Care-note import masks likely secrets before any hosted model sees the text, and shows the owner what will be sent ([03 §3.8.1](03-core-architecture.md#381-care-note-import)). The pasted note is deleted when the import is done unless the owner keeps it.

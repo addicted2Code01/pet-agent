@@ -26,7 +26,7 @@
 Rules:
 - The core depends only on its own ports. No HTTP, SQL, LLM SDK or chat library is imported inside the core.
 - **Driving adapters never touch storage.** The web app, MCP server and AI assistant all go through the same command/query API, with the same authorization.
-- **AI is an adapter on both sides.** As a *driving* adapter, the assistant turns natural language into core queries and commands. As a *driven* port (`LanguageModel`), the core may ask for prose (a visit-report summary), but never for a fact or a decision.
+- **AI is an adapter on both sides.** As a *driving* adapter, the assistant turns natural language into core queries and commands. As a *driven* port (`LanguageModel`), the core may ask for prose (a visit-report summary) or for drafts that a person must confirm (care-note import, §3.8.1), but never for a fact or a decision.
 
 ## 3.2 Caller context
 
@@ -35,15 +35,15 @@ Every command and query carries a `CallerContext`:
 ```
 CallerContext {
   account_id
-  actor: Actor            # user / system / integration, + on_behalf_of
-  interface: "web" | "mobile" | "api" | "assistant" | "mcp" | "discord" | ...
+  actor: Actor            # user / guest / system / integration, + on_behalf_of
+  interface: "web" | "mobile" | "guest_link" | "api" | "assistant" | "mcp" | "discord" | ...
   egress_tier: "normal" | "private"   # the most sensitive data this interface may receive
   now: Instant            # from the Clock port at the edge, so a request is evaluated at one instant
   locale, request_id
 }
 ```
 
-`interface` and `egress_tier` come from the authenticated credential, never from the request. First-party apps get `private` (what a user may see is still decided by their role). The owner registers each other integration, for example an MCP server on their laptop with a local model, and sets its tier; the default is `normal`.
+`interface` and `egress_tier` come from the authenticated credential, never from the request. First-party apps get `private` (what a user may see is still decided by their role). A sitter on a guest link gets `interface = "guest_link"`, the `normal` tier, and exactly their engagement's scope. The owner registers each other integration, for example an MCP server on their laptop with a local model, and sets its tier; the default is `normal`.
 
 The policy layer uses `actor`, `interface` and `egress_tier` to decide access and redaction. For example, the `assistant` interface never receives secret plaintext unless the secret allows it, and private photos are replaced by placeholders for interfaces with a `normal` tier.
 
@@ -53,13 +53,15 @@ Each command validates input, checks policy, enforces invariants, writes through
 
 | Area | Commands |
 |---|---|
-| Accounts & access | `CreateAccount`, `InviteMember`, `AcceptInvitation`, `ChangeMemberRole`, `RemoveMember`, `CreateEngagement`, `ConfirmEngagement`, `CancelEngagement`, `PlanVisits`, `CheckIn`, `CheckOut` |
+| Accounts & access | `CreateAccount`, `InviteMember`, `AcceptInvitation`, `ChangeMemberRole`, `RemoveMember`, `CreateEngagement`, `ConfirmEngagement`, `CancelEngagement`, `EndEngagement` ("I'm home"), `SetVetAuthorization`, `CreateGuestLink`, `RevokeGuestLink`, `VerifyGuest` (one-time code), `PlanVisits`, `CheckIn`, `CheckOut` |
 | Sites & places | `CreateSite`, `UpdateSite`, `CreatePlace`, `MovePlace` (re-parent), `RenamePlace`, `ArchivePlace` |
 | Pets | `CreatePet`, `UpdatePet`, `RecordPetLocation`, `RecordWeight` |
 | Items | `CreateItem`, `UpdateItem`, `SetHomePlace`, `MoveItem`, `RecordSighting`, `ReturnItemHome`, `ArchiveItem` |
-| Inventory | `Restock`, `RecordConsumption`, `CountStock`, `TransferStock`, `SetStockThresholds`, `AddToShoppingList`, `MarkBought` |
+| Inventory | `SetSupplyLevel` (plenty / low / out), `Restock`, `RecordConsumption`, `CountStock`, `TransferStock`, `SetStockThresholds`, `AddToShoppingList`, `MarkBought` |
 | Medications | `CreateMedicationOrder`, `ReviseMedicationOrder`, `SetNotBefore`, `PauseOrder`, `DiscontinueOrder`, `RecordAdministration`, `OverrideAndRecordAdministration` |
-| Care | `CreateRoutine`, `UpdateRoutine`, `PauseRoutine`, `CompleteTask`, `SkipTask`, `SnoozeTask`, `UndoTaskCompletion` (time-limited) |
+| Care | `CreateRoutine`, `UpdateRoutine`, `PauseRoutine`, `CompleteTask`, `SkipTask`, `SnoozeTask`, `UndoTaskCompletion` (time-limited), `AnswerReminder` (Taken / Snooze / Skip from a notification; becomes `RecordAdministration`, `CompleteTask`, `SnoozeTask` or `SkipTask`) |
+| Setup | `ApplyTemplate`, `ImportCareNote`, `AcceptDraft`, `EditDraft`, `RejectDraft` |
+| Notifications | `SetNotificationPreferences` |
 | Knowledge | `CreateKnowledgeEntry`, `ReviseKnowledgeEntry`, `ArchiveKnowledgeEntry`, `CreateSecret`, `RotateSecret`, `RevealSecret` (a command, because it's logged) |
 | Contacts | `CreateContact`, `UpdateContact`, `LinkContact`, `UnlinkContact` |
 | Media | `BeginUpload` → `CompleteUpload` (strips metadata, makes variants), `LinkMedia`, `UnlinkMedia` |
@@ -82,18 +84,21 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `PlaceTree(site_id)` | The nested place hierarchy. |
 | `LowStock(scope)`, `ShoppingList()` | |
 | `KnowledgeFor(subject_id, include_related)` | Entries (critical first), playbooks, linked contacts. |
-| `EmergencyCard(pet_id / site_id)` | Vets, emergency vet, owner contacts, critical notes, active medications. Fits on one screen. |
-| `Activity(scope, range)`, `VisitReport(visit_id)` | Events grouped for display. |
+| `EmergencyCard(pet_id / site_id)` | Vets, emergency vet, owner contacts, critical notes, active medications, and the vet authorization for the current engagement. Fits on one screen. |
+| `CareSheet(scope, format)` | Everything a sitter needs for a pet or an engagement, as structured data or a print layout. Never includes secret values; `private` data only if the owner opts in for that print. |
+| `OfflineBundle(engagement_id)` | A read-only snapshot of the care sheet, emergency card and the stay's tasks for the sitter's device, expiring when access ends. No secrets. |
+| `Activity(scope, range)`, `Report(report_id)` | Events grouped for display; visit, daily and stay reports. |
+| `Drafts(import_job_id / template_id)` | Pending drafts with their source excerpts, for the owner to accept, edit or reject. |
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
 | `AiUsage(scope, period)` | Used and remaining for the credit balance and each limit; breakdown by member, purpose and model; reset time; projected run-out date. |
-| `Readiness(engagement_id)` | Whether every capability the engagement depends on (secret keys, media, model) is reachable (§3.9.4). |
+| `Readiness(engagement_id)` | Whether the trip is ready: sitter link sent and opened; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). |
 | `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge. This is the generalized "send everything in the prompt" from the prototype. |
 
 ## 3.5 Events
 
 Every command emits one or more events (`2.12 Event`), stored in the same transaction (transactional outbox) and then published through `EventPublisher`. Consumers are adapters or core jobs:
-- the **notifier** (task reminders, overdue escalation, low stock, urgent incidents, engagement starting)
-- **visit-report** assembly
+- the **notifier** (task reminders, overdue escalation, refused or missed doses, low stock, urgent incidents, engagement starting)
+- **report** assembly (visit, daily and stay reports)
 - the **search index** updater
 - **sync** to offline clients
 - analytics, webhooks and integrations (later)
@@ -103,15 +108,19 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | Job | Purpose |
 |---|---|
 | `MaterializeTasks` | Keep calendar tasks generated N days ahead; regenerate when routines change. |
-| `TaskStatusSweeper` | Mark `missed`, send reminders and escalations. Reads are correct without it; it exists for notifications. |
-| `EngagementLifecycle` | Open/close caregiver access at window edges; activate engagement-only routines. |
+| `ReminderDispatcher` | Send reminders by each routine's `reminder_policy`; repeat until answered; escalate to the owner, then a backup contact; withdraw a reminder on every device the moment anyone completes the task. |
+| `DeliveryMonitor` | Track delivery receipts per channel; fall back to the recipient's next channel when one fails; alert us when delivery rates drop. Reliability is the product (README principle 10). |
+| `TaskStatusSweeper` | Mark tasks `missed` and raise missed-dose alerts to the owner. Reads are correct without it. |
+| `EngagementLifecycle` | Send the owner the readiness check a day before a trip; open/close caregiver access at window edges and at "I'm home"; activate engagement-only routines; expire guest links. |
+| `ReportBuilder` | Assemble visit, daily and stay reports from events, and push them to the owner. |
+| `ImportDrafting` | Turn a pasted care note into drafts (§3.8.1). |
 | `LowStockCheck` | Raise `stock.low` and fill the shopping list. |
 | `MediaPipeline` | Strip metadata, make variants, compute hashes. |
 | `Retention` | Hard-delete soft-deleted data past retention; purge secrets of closed engagements from caches. |
 | `PeriodRollover` | Start each billing period: issue the plan's credit grant and expire the previous one. |
 | `ReservationSweeper` | Release usage reservations whose calls never settled (crashed workers). |
 | `UsageReconciliation` | Compare the usage ledger with providers' usage reports daily; flag drift. |
-| `CapabilityHealth` | Check edge nodes and providers; run engagement readiness checks and warn owners (V2). |
+| `CapabilityHealth` | Check edge nodes and providers, and add capability checks to engagement readiness (V2). |
 
 ## 3.7 Ports
 
@@ -123,7 +132,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `BlobStore` | Put/get/delete media; signed URLs | S3-compatible, local disk |
 | `Crypto` | Envelope encryption for secrets; key rotation | Cloud KMS, local keyfile |
 | `Identity` | Verify sign-in, map to `User` | OIDC, passkeys, magic links |
-| `Notifier` | Deliver a message to a user on a channel | Push (APNs/FCM), email, SMS, Discord, Slack |
+| `Notifier` | Deliver a message on a channel and report delivery receipts | Push (APNs/FCM), web push, email, SMS, Discord, Slack |
 | `EventPublisher` | Publish committed events | In-process bus, queue, webhooks |
 | `JobScheduler` | Run recurring and one-off jobs | Cron in-process, queue workers |
 | `SearchIndex` | Full-text + fuzzy name/alias search | SQLite FTS5, Postgres full-text, Meilisearch |
@@ -147,6 +156,19 @@ The assistant is a driving adapter with this loop:
 5. The assistant's own model calls go through the `ModelGateway` (§3.10), so they're routed by sensitivity and metered against the account's allotment.
 
 An assistant the owner runs on their own hardware with a local model is just another interface with its own credential: it calls the public API like any other client, and the gateway and metering don't apply.
+
+In MVP the assistant is scoped to grounded answers about the household ("where's the leash?", "can I give it now?", "what's next?") and to setup help. It doesn't diagnose or give medical advice; for health questions it shows the relevant playbook and the vet's number ([01 §1.13](01-features.md#113-deliberately-not-building)).
+
+### 3.8.1 Care-note import
+
+The other model use in MVP turns the note an owner already leaves for sitters into structured drafts:
+
+1. **Mask.** A deterministic detector in the core finds likely secrets (door and alarm codes, passwords) and replaces them with placeholders before any hosted model sees the text. The owner is shown what will be sent.
+2. **Draft.** The masked text goes through the `ModelGateway` (§3.10) with purpose `care_note_import`. The model returns proposed routines, medication orders, contacts, places and notes, each with the sentences it came from.
+3. **Validate.** Each proposal is checked against its target's schema. Anything invalid stays a draft with the problem marked.
+4. **Confirm.** The owner accepts, edits or rejects each `Draft`. Nothing becomes a record without a person accepting it (principle 11). An accepted medication draft keeps its source sentences as `instructions_verbatim`, and masked secrets come back as secret drafts filled in locally from the original text.
+
+New accounts get onboarding credits for this ([00 §0.7](00-product-offering.md#07-packaging-proposal)), so setup never hits a paywall. Owners with an edge node can route import to their local model, which may see the unmasked text.
 
 The **MCP server** is the same tool set exposed over MCP, so any MCP-capable client gets exactly the same safe behavior. Chat bots are thin adapters on top of the assistant.
 
@@ -235,7 +257,7 @@ So that moving a part later is configuration, not a rewrite:
 
 ## 3.10 AI usage metering
 
-Hosted models are paid per token, so every account has an **AI allotment**, and the core meters each hosted model call against it. Metering is an ordinary core module: it doesn't depend on any provider, and the same mechanism can later meter other paid capabilities such as SMS.
+Hosted models are paid per token, so every account has an **AI allotment**, and the core meters each hosted model call against it. Metering is an ordinary core module: it doesn't depend on any provider, and the same ledger and limits meter SMS reminders to sitters, which are paid per message.
 
 ### 3.10.1 One gateway for every model call
 
@@ -267,7 +289,7 @@ The plan sets the default limits. An owner can add tighter limits (cap a sitter 
 
 ### 3.10.3 Who pays
 
-Usage is charged to the account in the caller context: a sitter chatting about the Campbells' cat uses the Campbells' allotment. Calls to the owner's edge node, and later to a provider key the owner brings, are recorded for the usage display but aren't billable.
+Usage is charged to the account in the caller context: a sitter chatting about the Campbells' cat uses the Campbells' allotment, and SMS reminders sent to that sitter are charged to the Campbells too. Calls to the owner's edge node, and later to a provider key the owner brings, are recorded for the usage display but aren't billable.
 
 ### 3.10.4 Running out never affects care
 

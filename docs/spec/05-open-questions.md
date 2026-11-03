@@ -37,9 +37,8 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 ## Access & collaboration
 
-**Q11. Do caregivers need an account to help?** A "magic link" guest view would lower friction for a neighbor watching the cat once.
-
-*Recommendation:* allow link-only guest access, scoped to one engagement, with no secrets.
+**Q11. Do caregivers need an account to help?** ✅
+*Decided:* no. A sitter link opens the care guide without an app or account, scoped to one engagement and expiring with it. Every care-guide competitor leads with this ([06 #4](06-feature-research.md#63-ranked-features)). Revealing a door code needs a one-time code sent to the sitter's phone or email, and links never carry private data ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)).
 
 **Q12. Can the owner see a caregiver's location** (check-in geofence)? It's useful for pros and sensitive for friends.
 
@@ -49,13 +48,11 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 **Q13. Core language.** Python (continuity with the prototype, AI ecosystem) or TypeScript (one language with web/mobile)?
 
-**Q14. Offline support in MVP?** Sitters in basements and garages lose signal. Offline completion of tasks and doses is valuable, but sync adds complexity.
+**Q14. Offline support in MVP?** ✅
+*Decided:* partly. The sitter's phone keeps a read-only offline copy of the care guide and emergency card, and task completions queue while offline. Full offline editing and sync come in V2. Ids, versions and idempotent commands are designed for it from day one.
 
-*Recommendation:* design for it now (ids, versions, idempotent commands). Ship online-only MVP with a queued-retry client, and full offline in V2.
-
-**Q15. Notifications in MVP?** Reminders and overdue alerts are core value for medications.
-
-*Recommendation:* MVP with push + email for overdue medications and urgent incidents only.
+**Q15. Notifications in MVP?** ✅
+*Decided:* yes, and reminders are the top-ranked feature ([06 #1](06-feature-research.md#63-ranked-features)). Push with email as backup for persistent reminders and escalation, refused or missed doses, urgent incidents, photo updates and reports. Sitters without the app get medication reminders by SMS.
 
 ## Placement & AI usage
 
@@ -75,10 +72,21 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 *Recommendation:* measure first. Run the beta with generous limits, record the cost per active household for four weeks, then set the standard allotment near the 90th percentile of monthly use.
 
-## Next steps once these are answered
+## From the feature research
 
-1. Lock the MVP feature list (01) against the answers.
-2. Write command/query schemas (inputs, outputs, errors) for the MVP set.
-3. Write a test-first spec for `can_administer`, recurrence/DST and `whats_next`, the three safety-critical algorithms.
-4. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
-5. Plan migration of prototype data (§2.16 in the domain model).
+**Q20. Product name.** "PawSitter: Pet Boarding & Care" is already on the App Store, at pawsitter.app.
+
+*Recommendation:* choose a new name before buying domains or building branding, and run a trademark search on the shortlist.
+
+**Q21. How do owners get reliable push: a native app or a PWA?** Reminders are the most important feature, and on iPhone, web push works only after the user adds the site to their home screen.
+
+*Recommendation:* a thin native shell around the web app for owners and family (one codebase, reliable push), and the no-install web link with SMS reminders for sitters. This leans toward TypeScript for Q13.
+
+## Next steps
+
+1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
+2. Decide Q13 (core language), Q20 (name) and Q21 (owner app), which shape the first build.
+3. Write command/query schemas (inputs, outputs, errors) for the MVP set.
+4. Write a test-first spec for the safety-critical algorithms: `can_administer` (including dated revisions), recurrence/DST, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
+5. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
+6. Plan migration of prototype data (§2.18 in the domain model).

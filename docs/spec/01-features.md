@@ -2,7 +2,10 @@
 
 Priority key: **MVP** = needed for a first paid product. **V2** = next. **Later** = valuable, not yet.
 
-Every feature below is a core capability. How it's surfaced (screen, chat, voice, MCP tool, bot command) is an adapter concern; see [03-core-architecture.md](03-core-architecture.md).
+- **★** marks a differentiator: something no competitor we found offers ([00 §0.3](00-product-offering.md#03-why-it-wins)).
+- **06 #n** is the feature's rank in the [feature research](06-feature-research.md).
+
+Every feature below is a core capability. How it's surfaced (screen, chat, voice, MCP tool, bot command) is an adapter concern; see [03-core-architecture.md](03-core-architecture.md). Setup and onboarding are in [1.12](#112-setup--onboarding); what we deliberately leave out is in [1.13](#113-deliberately-not-building).
 
 ## 1.1 Accounts, people & access
 
@@ -11,9 +14,13 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Sign up, sign in, multiple accounts per user | MVP | A sitter has one login across every family they work for. |
 | Account members with roles: owner, admin, family, caregiver | MVP | See [04-permissions-privacy.md](04-permissions-privacy.md). |
 | Invite by link or email, accept or decline | MVP | |
-| **Engagements**: time-boxed care jobs granting a caregiver access to chosen pets and sites | MVP | Access opens shortly before the job starts and closes after it ends. |
+| **Sitter link**: a caregiver opens their care guide from a link, with no app or account | MVP | Decided (Q11). Tied to one engagement, expires with it, revocable. Revealing a door code needs a one-time code sent to the sitter's phone ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)). 06 #4. |
+| ★ **Engagements**: time-boxed care jobs granting a caregiver access to chosen pets and sites | MVP | Access opens shortly before the job starts and closes after it ends. 06 #12. |
+| **Trip setup**: dates, sitter and pets in one flow, producing the sitter link, the care plan for the stay and a readiness check | MVP | The "going away" journey ([00 §0.5](00-product-offering.md#05-core-journeys)). |
 | Visit types: drop-in visits (with planned windows), overnight stays, boarding at another site | MVP | |
-| Visit check-in/out with optional geofence confirmation | V2 | |
+| **"I'm home" handback**: the owner ends the engagement; the sitter's access closes and both get the stay summary | MVP | Replaces the "text me when you're back" ritual. 06 #23. |
+| Proof of care: every completed task is timestamped, with optional photo evidence | MVP | Proof without tracking anyone. 06 #17. |
+| Visit check-in/out with optional geofence confirmation | V2 | Opt-in per engagement (Q12). 06 #17. |
 | Hand-over notes between caregivers | V2 | |
 | Professional-sitter accounts managing many client households | Later | Possibly a B2B tier; see open questions. |
 | Clinic, boarding and daycare accounts sharing records with owners | Later | Cross-account sharing. |
@@ -24,11 +31,11 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | Multiple sites per account (home, vacation home, clinic, boarding, daycare, vehicle, park) | MVP | Each has an address, time zone and optional geo point. |
 | Owned vs. external sites | MVP | "Happy Paws Clinic" is a site the account references but doesn't own. |
-| Nested places to any depth: room → furniture → shelf → container | MVP | For example Kitchen → Pantry → Shelf 2 → Blue airtight container. |
+| Nested places to any depth: room → furniture → shelf → container | MVP | For example Kitchen → Pantry → Shelf 2 → Blue airtight container. The UI suggests three levels (Q5). |
 | Photos and descriptions on places ("the basket by the front door") | MVP | |
+| ★ Site access info (entry instructions, parking, alarm, lockbox) as secrets, with a photo of where the lockbox or keypad is | MVP | Every reveal is logged for the owner. 06 #13. |
 | Portable containers (carrier, go-bag, car kit) whose contents move with them | V2 | A container place backed by an item. |
 | Floor-plan or room map view | Later | |
-| Site access info (entry instructions, parking, alarm) as secrets | MVP | |
 
 ## 1.3 Pets
 
@@ -39,8 +46,9 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Favorite and usual spots | MVP | Modeled as knowledge linked to places. |
 | Diet: foods, amounts, restrictions, allergies | MVP | Foods are items; amounts are in care routines. |
 | Behavior and temperament notes, handling tips, triggers | MVP | Knowledge entries. |
-| Weight log | V2 | |
-| Health records: conditions, vaccinations, vet visits, documents | V2 | |
+| Vaccination certificates and vet documents on the pet profile | MVP | Boarding and daycare ask for proof. 06 #16. |
+| Weight log | V2 | 06 #16. |
+| Health records: conditions, structured vaccinations with due dates, vet visits | V2 | 06 #16. |
 | Insurance and registration documents | Later | |
 
 ## 1.4 Items, supplies & inventory
@@ -49,10 +57,11 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | Items: toys, equipment, food, medications, cleaning supplies, documents | MVP | Categorized with a category tree. |
 | Home place (where it belongs) vs. last seen (where it actually is) | MVP | "The hedgehog lives in the toy bin but was last seen under the couch." |
-| Find anything: "where is X?" across items, places, aliases and photos | MVP | Aliases matter: "ear medicine" = Methimazole. |
+| ★ **Find anything**: "where is X?" across items, places, aliases and photos | MVP | Aliases matter: "ear medicine" = Methimazole. Our least-evidenced bet: validate in interviews before investing beyond MVP (06 #15). |
+| Quick add by photo: snap an item, name it, pick where it lives | MVP | Fast setup. 06 #6. |
 | Movement history | MVP | |
-| Consumable stock with units: count, weight, volume | MVP | 1 roll of poop bags; 3 cans of food. |
-| Low-stock thresholds and alerts; shopping list | MVP | |
+| **Supply levels** per place: plenty / low / out, with exact counts optional (count, weight, volume) | MVP | Counting is the heavy part for households. 06 #18. |
+| Shopping list: marking a supply low adds it; counted supplies can use thresholds | MVP | 06 #18. |
 | Record consumption (manually, or automatically from completed tasks) | V2 | Feeding uses ½ can and decrements stock. |
 | Product catalog with barcode, brand and default photo | V2 | Scan to add or restock. |
 | Expiry dates (food, medications) | V2 | |
@@ -63,14 +72,18 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 
 | Feature | Priority | Notes |
 |---|---|---|
-| Structured medication orders: drug, strength, dose, route, frequency, scheduled vs. as-needed (PRN), start/end, prescriber | MVP | Plus the owner's verbatim instructions. |
+| Structured medication orders: drug, strength, dose, route, frequency, scheduled vs. as-needed (PRN), start/end, prescriber | MVP | Plus the owner's verbatim instructions. Fractional doses (½ tablet), ml by syringe and clicks. 06 #11. |
 | Safety limits: minimum interval between doses, maximum doses per day, "not before" date/time | MVP | "Cerenia: not before Tue Nov 3, 08:00." |
-| Administration log: given, partial, refused, vomited, skipped, with dose, by whom, when | MVP | |
-| **Can I give it now?**: a computed answer with the reason and the next allowed time | MVP | Never left to an LLM. |
+| ★ **Can I give it now?**: a computed answer with the reason and the next allowed time | MVP | Never left to an LLM. Our lead feature. 06 #7. |
+| **Medication reminders** that persist until answered, with Taken / Snooze / Skip from the notification | MVP | See 1.6. 06 #1. |
+| Administration log: given, partial, refused, spat out, vomited, skipped, with dose, by whom, when | MVP | Shared with every caregiver. 06 #2. |
+| **If missed / if refused** instructions per medication, shown when a dose is late or refused | MVP | E.g. "Don't double up. Call the vet if two doses are missed." 06 #8. |
+| Owner alerted at once when a dose is refused, skipped, spat out or missed | MVP | 06 #8. |
+| Scheduled dose changes (tapering) from dated revisions | MVP | 06 #11. |
 | Medication item linkage: which bottle or pen, where it's kept, photo of the label | MVP | Label photos are sensitive (name and address). |
 | Administration tips (pill pockets, mix in food) and fallbacks (gabapentin if refusing) | MVP | Knowledge linked to the order. |
-| Refill tracking and remaining-dose estimate | V2 | |
 | Dosage-change history with who changed it | MVP | Audit trail. |
+| Refill tracking and remaining-dose estimate | V2 | 06 #18. |
 
 ## 1.6 Care routines & daily tasks
 
@@ -80,10 +93,12 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Calendar recurrence in the site's local time (daily 08:00 and 20:00; weekdays) | MVP | RFC 5545 RRULE. |
 | Interval recurrence anchored on the last completion ("every 8 h after the last dose") | MVP | Medications need this. |
 | Time windows and grace periods (due 07:00–09:00) | MVP | Drives on-time / late / missed. |
-| Today view: done, due, overdue, upcoming, and **what's next** | MVP | A computed core query. |
+| **Reminders that persist until answered**: before the due time, then repeating until someone responds, with Taken / Snooze / Skip from the notification | MVP | Moved from V2 (Q15). 06 #1. |
+| Escalation: if nobody answers, alert the owner, then a backup contact | MVP | Per routine; on by default for medications. 06 #1. |
+| **Shared log**: every completion shows who did it and when, and clears everyone's reminder for it | MVP | Answers "did anyone feed the dog?" for the whole family. 06 #2. |
+| Today view: done, due, overdue, upcoming, and **what's next** | MVP | A computed core query. 06 #9. |
 | Complete, skip (with reason) or snooze a task; attach note or photo evidence | MVP | |
 | Routines active only during an engagement or at a specific site | MVP | Different routine when boarding. |
-| Reminders before due time; escalation when overdue | V2 | Via the notification port. |
 | Visit checklist generated from the tasks due during a visit window | V2 | |
 
 ## 1.7 Knowledge, contacts & emergencies
@@ -93,18 +108,27 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Knowledge entries on any subject (account, site, place, pet, item, medication order) | MVP | Categorized; with photos. |
 | Sensitivity levels: normal, private (owner/family only), secret (encrypted, access-logged) | MVP | |
 | Version history on knowledge | MVP | Who changed instructions and when. |
-| Contacts: vets, emergency vet, owner, neighbors, groomer, walker | MVP | With roles and linked pets/sites. |
-| Emergency playbooks: lost pet, vomiting, injury, toxin ingestion, fire | MVP | Structured steps plus contacts. |
-| Incident reports by caregivers (severity, notes, photos) that alert the owner | MVP | "Vomited twice today." |
+| What's normal for this pet: baseline quirks (hairballs, limping after naps) so a sitter can tell normal from worrying | MVP | Knowledge of kind `baseline`. 06 #5. |
+| Contacts: vets, emergency vet, owner, neighbors, groomer, walker | MVP | With roles, linked pets and sites, and tap-to-call. |
+| **Emergency card**: vets, emergency vet, owner contacts, critical notes, active medications and vet authorization on one screen | MVP | 06 #5. |
+| **Vet treatment authorization** per engagement: whether the sitter may approve treatment, a spending limit, exclusions (e.g. euthanasia), and whether to try the owner first | MVP | Replaces the paper vet-release form. 06 #10. |
+| Emergency playbooks: lost pet, vomiting, injury, toxin ingestion, fire | MVP | Structured steps plus contacts, with clear "watch and wait" vs. "call the vet now" thresholds. 06 #5. |
+| Incident reports by caregivers (severity, notes, photos) that alert the owner | MVP | "Vomited twice today." 06 #14. |
+| **Care sheet**: everything a sitter needs on one page, printable | MVP | Door codes are never printed. 06 #20. |
 
 ## 1.8 Activity, reporting & notifications
 
 | Feature | Priority | Notes |
 |---|---|---|
 | Activity feed: tasks completed, meds given, moves, stock changes, incidents | MVP | From the event log. |
-| Visit / daily report to the owner, with photos | MVP | Generated from events; an AI may write the prose. |
-| Notification preferences per user and channel | V2 | Push, email, SMS, chat apps: all adapters. |
-| Export (PDF care sheet, CSV) | V2 | |
+| Photo updates and visit / daily reports to the owner, pushed as they happen | MVP | Generated from events; an AI may write the prose. 06 #3. |
+| **Stay summary** at handback: what was done, on time or late, photos, incidents | MVP | 06 #23. |
+| **Push notifications** for reminders, escalations, refused or missed doses, urgent incidents and photo updates; email as backup | MVP | Email-only updates get missed (06 #3). Decided (Q15). |
+| Reminders for sitters without the app: SMS for medications, email or web push for the rest | MVP | SMS is metered like AI ([03 §3.10](03-core-architecture.md#310-ai-usage-metering)). |
+| **Discreet notifications**: hide medication names on the lock screen | MVP | 06 #24. |
+| Notification preferences: channels, quiet hours, discreet mode | MVP | Medication reminders can be set to override quiet hours. |
+| Chat-app notifications (Discord, Slack, Telegram) | V2 | Each an adapter with its own privacy review. |
+| Export (PDF care sheet, CSV) | V2 | The printable care sheet is MVP (1.7). |
 
 ## 1.9 Interfaces (adapters, not core)
 
@@ -112,8 +136,10 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | Public API (HTTP) | MVP | Every other interface uses it, or embeds the core directly. |
 | Web app: owner management + caregiver view | MVP | |
-| Mobile app or PWA for caregivers, offline-capable | MVP/V2 | See open questions. |
-| AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Uses the assistant port; tools = core queries. |
+| Owner and family app with reliable push | MVP | Native shell or PWA; see Q21. |
+| **Sitter web view** from a link, no install: today's checklist, can-I-give-it, where-is, emergency card | MVP | 06 #4. |
+| Read-only offline copy of the care guide and emergency card on the sitter's phone; task completions queue while offline | MVP | Expires with access and holds no codes. Full offline editing V2 (Q14). 06 #19. |
+| AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Grounded in the household's data ("where's the leash?", "can I give it now?") plus setup help; no diagnosis. 06 #21. |
 | MCP server exposing core queries/commands as tools | V2 | Can run on the owner's own machine against the cloud API; adds no model cost. |
 | Chat bots (Discord, Slack, Telegram, SMS) | Later | Each is an adapter with its own privacy review. |
 | Voice (smart speaker) | Later | |
@@ -122,14 +148,15 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 
 | Feature | Priority | Notes |
 |---|---|---|
+| **Notification delivery monitoring**: track every reminder from sent to answered; fall back to another channel and alert us when delivery degrades | MVP | Reliability is the product (principle 10 in the [README](README.md)). 06 #1. |
 | Audit log of sensitive reads (secrets, label photos) | MVP | |
 | Data export and account deletion | MVP | Privacy law and trust. |
 | Backups and point-in-time restore | MVP | |
 | Per-account capability routing: which provider serves the model, vision, media and keys, by data sensitivity | MVP | Cloud providers only at first; see [03 §3.9](03-core-architecture.md#39-deployment-and-placement). |
 | Edge node: run the model and vision, and keep private media and chosen secret keys, on the owner's own hardware | V2 | Dials out to the cloud; no port forwarding. |
-| Engagement readiness check: warn the owner if something a sitter needs (e.g. a home-held key) is offline | V2 | |
+| Engagement readiness check: warn the owner if something a sitter needs is missing or offline | MVP | Part of trip setup (1.1). Checks for home-held keys arrive with the edge node (V2). |
 | Self-hosted edition: core and data on the owner's hardware, with a cloud relay for sitters | Later | The original prototype's local-first story. |
-| Billing and plans | V2 | AI allotments ship in MVP regardless; see 1.11. |
+| Billing and plans: Free and Plus | V2 | Proposal in [00 §0.7](00-product-offering.md#07-packaging-proposal). AI allotments ship in MVP regardless; see 1.11. |
 
 ## 1.11 AI usage & allotments
 
@@ -137,6 +164,8 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | Meter every hosted model call: tokens, our cost and the credits charged | MVP | One gateway in the core; see [03 §3.10](03-core-architecture.md#310-ai-usage-metering). |
 | AI allotment per account per billing period, with a hard stop | MVP | Care features keep working when it runs out. |
+| Onboarding credits: enough for every new account to import its care notes | MVP | A `promo` credit grant; setup should never hit a paywall. |
+| SMS reminders metered on the same ledger and limits | MVP | Paid per message, like tokens. |
 | Rate limits per member and per assistant turn | MVP | Stops bursts and runaway tool loops. |
 | Usage meter with warnings at 80 % and 100 % | MVP | Broken down by member, purpose and model. |
 | Caps per member, per engagement and per purpose | V2 | E.g. limit a sitter's AI use, or keep credits for visit reports. |
@@ -145,3 +174,25 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Reconciliation against providers' usage reports | V2 | |
 | Paid overage | Later | Opt-in only; no surprise bills. |
 | Bring your own provider key | Later | Recorded, not billable. |
+
+## 1.12 Setup & onboarding
+
+| Feature | Priority | Notes |
+|---|---|---|
+| ★ **Ready in 10 minutes**: guided setup that ends with a care guide a sitter can use | MVP | Target: median under 10 minutes ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)). 06 #6. |
+| Starter templates by species and situation: cat, dog, puppy, senior pet on medication | MVP | 06 #6. |
+| ★ **Import an existing care note**: paste text; AI drafts routines, medications, contacts, places and notes for the owner to confirm one by one | MVP | Nothing becomes a record until a person accepts it, and medication drafts keep the source text verbatim (principle 11). Uses onboarding credits (1.11). 06 #6. |
+| Quick add by photo for items and places | MVP | See 1.4. |
+| Import from a photo of a handwritten or printed sheet | V2 | Vision port. |
+| Invite family during setup, so the shared log starts on day one | MVP | The everyday habit ([00 §0.3](00-product-offering.md#03-why-it-wins)). |
+
+## 1.13 Deliberately not building
+
+| Not building | Instead | Why |
+|---|---|---|
+| In-app chat between owner and sitter | Comments on tasks and incidents; tap-to-text the owner | Households already text their sitters; chat is costly to build and run (06 #22). |
+| Vet telehealth | Tap-to-call the pet's own vet and emergency vet | Funded incumbents and regulatory weight (06 #25). |
+| AI diagnosis or symptom checking | Playbooks with the owner's thresholds; call the vet | False confidence is dangerous (06 #21). |
+| Continuous GPS tracking of sitters | Timestamped tasks and photos; opt-in check-in in V2 | Battery drain and privacy (06 #17). |
+| A marketplace for finding sitters | Bring your own sitter: friends, family or a pro | Rover and Wag own that market; we make any sitter better at the job. |
+| Physical key tracking | Model a key as a tracked item if asked | A pro-sitter need (06 #26). |

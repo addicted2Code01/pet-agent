@@ -115,6 +115,8 @@ D·I·F = Demand · Impact · Fit.
 
 ## 6.6 Recommended changes to the spec
 
+All of these were applied in draft 0.3. The "Spec today" column in §6.3 shows the spec as it was before that.
+
 | Change | Where | Features |
 |---|---|---|
 | Medication reminders and overdue alerts move to MVP (settles Q15) | 01 §1.6, 05 Q15 | 1 |

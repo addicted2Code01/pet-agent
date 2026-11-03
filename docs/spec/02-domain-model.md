@@ -80,6 +80,13 @@ erDiagram
     ACCOUNT ||--o{ USAGE_LIMIT : caps
     ACCOUNT ||--o{ USAGE_RECORD : meters
     USAGE_RECORD }o--|| MODEL_RATE : "priced by"
+
+    ENGAGEMENT ||--o{ GUEST_LINK : "opened via"
+    ENGAGEMENT ||--o| REPORT : "summarized by"
+    VISIT ||--o| REPORT : "reported by"
+    TASK ||--o{ NOTIFICATION_DELIVERY : "reminded by"
+    IMPORT_JOB ||--o{ DRAFT : proposes
+    TEMPLATE ||--o{ DRAFT : proposes
 ```
 
 ## 2.4 Identity, tenancy & access
@@ -113,6 +120,16 @@ erDiagram
 
 **`Invitation`**: email/phone or link token, intended role, optional engagement, `expires_at`, `accepted_at?`.
 
+**`GuestLink`**: a sitter's way into one engagement without an account (Q11).
+
+| Field | Type | Notes |
+|---|---|---|
+| `engagement_id` | Engagement | Access is exactly the engagement's: its pets, sites, permissions and window. |
+| `token_hash` | bytes | The link carries a random token; only its hash is stored. |
+| `recipient_name`, `recipient_phone?`, `recipient_email?` | | Where reminders and one-time codes go. |
+| `verified_until?` | instant | Set when the guest enters a one-time code; required to reveal secrets ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)). |
+| `last_opened_at?`, `revoked_at?` | instant | The owner sees when the link was last opened, and can revoke it at once. |
+
 **`Engagement`**: a care job that grants time-boxed access.
 
 | Field | Type | Notes |
@@ -126,6 +143,9 @@ erDiagram
 | `permissions` | set | Defaults from the caregiver role; e.g. `secrets.reveal` off unless granted. |
 | `status` | enum | `draft` · `proposed` · `confirmed` · `active` · `completed` · `cancelled` |
 | `notes?` | text | Owner-to-caregiver notes for this job. |
+| `vet_authorization?` | object | `{may_authorize, spending_limit?, exclusions[], try_owner_first, notes?}`: whether the caregiver may approve treatment, up to what amount, never what (e.g. euthanasia). Shown on the emergency card during the engagement. |
+| `returned_at?` | instant | Set by "I'm home": the engagement completes and household access closes immediately, without `access_lag`. |
+| `summary_report_id?` | Report | The stay summary sent at handback (2.12). |
 
 **`Visit`**: one planned visit inside a `drop_in` engagement (overnight stays can have one long visit).
 
@@ -137,7 +157,7 @@ erDiagram
 | `status` | enum | `planned` · `in_progress` · `completed` · `missed` · `cancelled` |
 | `report_id?` | ref | The visit report sent to the owner. |
 
-**`Actor`** (value object on every write and event): `{kind: user | system | integration, user_id?, integration?: "assistant" | "mcp" | "discord" | ..., on_behalf_of_user_id?}`. When an AI assistant acts, the event says *assistant on behalf of Jane*.
+**`Actor`** (value object on every write and event): `{kind: user | guest | system | integration, user_id?, guest_link_id?, integration?: "assistant" | "mcp" | "discord" | ..., on_behalf_of_user_id?}`. When an AI assistant acts, the event says *assistant on behalf of Jane*. A sitter on a guest link appears in the shared log under the name the owner gave them.
 
 ## 2.5 Sites & places
 
@@ -231,8 +251,9 @@ Why both `home_place_id` and `Placement`: people ask both "where does it go?" an
 |---|---|---|
 | `item_id` | Item (`tracking = consumable`) | |
 | `place_id` | Place | |
-| `quantity` | Quantity | Current amount. |
-| `low_threshold?`, `target_level?` | Quantity | Alert when quantity ≤ threshold; the shopping list fills up to the target. |
+| `level` | enum | `plenty` · `low` · `out`. Set directly by anyone in scope, or derived from `quantity` and `low_threshold` for counted supplies. |
+| `quantity?` | Quantity | Current amount, only for supplies the household chooses to count. |
+| `low_threshold?`, `target_level?` | Quantity | For counted supplies: alert when quantity ≤ threshold; the shopping list fills up to the target. |
 | `counted_at?` | instant | Last physical count. |
 
 **`StockTransaction`**: every change, immutable.
@@ -245,9 +266,9 @@ Why both `home_place_id` and `Placement`: people ask both "where does it go?" an
 | `task_id?`, `administration_id?` | refs | Auto-consumption from feeding tasks or doses (V2). |
 | `occurred_at` | instant | |
 
-`StockLevel.quantity` always equals the sum of its transactions (kept in the same write).
+For counted supplies, `StockLevel.quantity` always equals the sum of its transactions (kept in the same write). Uncounted supplies have no transactions; each level change is an event (`stock.level_changed`).
 
-**`ShoppingListEntry`**: `item_id`, `quantity`, `source` (`low_stock` | `manual`), `status` (`open` | `bought` | `dismissed`).
+**`ShoppingListEntry`**: `item_id`, `quantity?`, `source` (`low_stock` | `manual`), `status` (`open` | `bought` | `dismissed`). A supply turning `low` or `out` opens a `low_stock` entry.
 
 ## 2.8 Medications
 
@@ -272,11 +293,14 @@ Safety-critical, so fully structured. The owner's own words are kept alongside t
 | `prn_indication?` | text | When to give an as-needed dose ("if he won't take his meds"; "if vomiting"). |
 | `starts_on`, `ends_on?` | date | |
 | `instructions_verbatim` | text | **Exactly as the owner or label wrote it.** Shown next to any computed answer. |
+| `if_missed?` | text | What to do when a dose is late or missed, in the owner's words ("Don't double up. Call the vet if two doses are missed."). Shown with every overdue reminder. |
+| `if_refused?` | text | What to do when the pet refuses or spits out a dose. |
+| `alert_owner_on` | set | Outcomes that alert the owner at once. Default: `refused`, `spat_out`, `vomited_after`, `skipped`, and a dose turning `missed`. |
 | `item_id?` | Item | The physical bottle/pen and therefore where it's kept. |
 | `prescriber_contact_id?` | Contact | |
 | `status` | enum | `active` · `paused` · `completed` · `discontinued` |
 
-Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (`order_id`, snapshot, `changed_by`, `changed_at`, `reason`). Administrations reference the revision in force.
+Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (`order_id`, snapshot, `effective_from`, `changed_by`, `changed_at`, `reason`). A revision can take effect in the future, so a taper ("½ tablet from Monday, ¼ from the 20th") is a series of dated revisions. Administrations reference the revision in force at the time of the dose, and `can_administer` uses it.
 
 **`Administration`**
 
@@ -309,6 +333,7 @@ Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (
 | `instructions?` | text | "½ can wet food in his blue bowl" |
 | `consumes?` | `[{item_id, quantity}]` | Auto stock decrement on completion (V2). |
 | `requires_evidence` | enum | `none` · `note` · `photo` |
+| `reminder_policy` | object | `{remind_before, repeat_every, escalate_after, escalate_to[]}`. Defaults by kind: medications remind at the due time, repeat every 10 minutes until answered, and escalate to the owner after 30 minutes, then to a backup contact. Feeding reminds once. See 2.15. |
 | `active_from?`, `active_until?` | instant | |
 | `engagement_id?` | Engagement | Routine only during this job (e.g. boarding instructions). |
 | `status` | enum | `active` · `paused` · `archived` |
@@ -343,7 +368,7 @@ Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) b
 | Field | Type | Notes |
 |---|---|---|
 | `subject_id` | Subject | What it's about: a pet, item, place, site, medication order, or the account. |
-| `kind` | enum | `instruction` · `note` · `behavior` · `preference` (favorite toy/spot) · `rule` (house rule) · `playbook` (emergency steps) |
+| `kind` | enum | `instruction` · `note` · `behavior` · `baseline` (what's normal for this pet: hairballs, limping after naps) · `preference` (favorite toy/spot) · `rule` (house rule) · `playbook` (emergency steps, with "watch and wait" vs. "call the vet now" thresholds) |
 | `title` | string | "If Sonic vomits" |
 | `body` | markdown | |
 | `steps?` | `[{order, text, contact_id?}]` | For playbooks. |
@@ -414,13 +439,27 @@ Severity `urgent` or higher notifies owners immediately through every enabled ch
 | `payload` | object | Versioned schema per type. |
 | `correlation_id?` | UUID | Ties together events from one command. |
 
+**`Report`**: an update sent to the owner, built from events.
+
+| Field | Type | Notes |
+|---|---|---|
+| `kind` | enum | `visit` · `daily` · `stay` (the summary at handback) |
+| `engagement_id?`, `visit_id?` | refs | |
+| `range` | `{from, to}` instants | |
+| `sections` | object | Tasks on time, late and missed; doses and their outcomes; incidents; supply changes. Always present. |
+| `media_ids[]` | refs | Photos taken in the range. |
+| `prose?` | text | Optional summary from the `LanguageModel` port. The structured sections never depend on it. |
+| `sent_at?` | instant | |
+
 ## 2.13 Health records (V2)
 
 `WeightRecord` (`pet_id`, `weight`, `measured_at`), `Condition` (`name`, `diagnosed_on`, `status`, notes), `Vaccination` (`vaccine`, `given_on`, `due_on`, `clinic_contact_id`), `VetVisit` (`site_id`, `date`, `reason`, `summary`, documents via `MediaLink role=document`).
 
+In MVP, vaccination certificates and vet documents attach to the pet as `MediaLink role=document`, so boarding and daycare can be shown proof before structured records exist.
+
 ## 2.14 AI usage & allotments
 
-Hosted model calls are metered per account (see [03 §3.10](03-core-architecture.md#310-ai-usage-metering)). Usage records hold counts and costs, never prompt or reply text.
+Hosted model calls and SMS messages are metered per account (see [03 §3.10](03-core-architecture.md#310-ai-usage-metering)). Usage records hold counts and costs, never prompt, reply or message text.
 
 **`Plan`**: *not account-scoped; versioned.* `code`, `name`, `period` (e.g. `P1M`), `credits_per_period`, `default_limits[]` (`UsageLimit` templates), `features` (flags). Accounts point at a plan version, so editing a plan never silently changes existing accounts.
 
@@ -440,8 +479,8 @@ Hosted model calls are metered per account (see [03 §3.10](03-core-architecture
 |---|---|---|
 | `occurred_at` | instant | |
 | `actor`, `interface` | | Who caused it and through which interface (`system` for automatic visit reports) |
-| `capability` | enum | `language_model` · `vision` (later `embedding`, `speech`, `sms`) |
-| `purpose` | enum | `assistant` · `visit_report` · `photo_lookup` · `summary` · … |
+| `capability` | enum | `language_model` · `vision` · `sms` (later `embedding`, `speech`) |
+| `purpose` | enum | `assistant` · `care_note_import` · `visit_report` · `photo_lookup` · `summary` · `sitter_reminder` · … |
 | `provider`, `model`, `rate_id` | | The rate in force at the time |
 | `tokens` | `{input, output, cache_write, cache_read}` int | As reported by the provider |
 | `images` | int | |
@@ -477,22 +516,72 @@ The **credit balance** is the sum of unexpired grants' `remaining`. Usage draws 
 
 **`UsageCounter`**: derived and rebuildable from the ledger, like `StockLevel` from stock transactions: `(limit_id, window_start)` → `used`, `reserved`.
 
-## 2.15 Invariants (enforced by the core)
+## 2.15 Notifications & reminders
+
+Reminders that fire reliably are the most valued feature in the category ([06 #1](06-feature-research.md#63-ranked-features)), so every message is tracked from sent to answered.
+
+**`NotificationPreference`**: per user (or guest link) per account.
+
+| Field | Type | Notes |
+|---|---|---|
+| `channels` | set | `push` · `email` · `sms` · `web_push`, in order of preference |
+| `quiet_hours?` | `{from, to}` local times | |
+| `medication_overrides_quiet_hours` | bool | Default true. |
+| `discreet` | bool | Keep medication names and health details off lock screens and out of SMS text; show the routine's title instead. |
+
+**`NotificationDelivery`**: one row per message.
+
+| Field | Type | Notes |
+|---|---|---|
+| `recipient` | User or GuestLink | Guest sitters have no app: medication reminders go by SMS, the rest by email or web push. |
+| `channel` | enum | `push` · `email` · `sms` · `web_push` |
+| `kind` | enum | `reminder` · `escalation` · `dose_alert` · `incident` · `update` · `report` · `readiness` |
+| `task_id?`, `subject_ids[]` | refs | |
+| `sent_at`, `delivered_at?`, `opened_at?`, `answered_at?` | instant | Receipts where the channel provides them. |
+| `superseded_at?` | instant | Set when someone completes the task: the reminder is withdrawn on every device. |
+| `status` | enum | `queued` · `sent` · `delivered` · `failed` · `answered` · `superseded` |
+
+Delivery rates per channel feed the `DeliveryMonitor` job ([03 §3.6](03-core-architecture.md#36-background-jobs-jobscheduler-port)). When a channel fails for a recipient, the next one in their list is tried.
+
+## 2.16 Setup: templates & import drafts
+
+Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranked-features)). Templates and AI import both produce **drafts**; nothing becomes a record until a person accepts it.
+
+**`Template`**: *not account-scoped.* A starter set such as `cat`, `dog`, `puppy` or `senior_on_medication`: routines, knowledge prompts ("What's normal for her?"), playbooks and place suggestions.
+
+**`ImportJob`**: an owner's pasted care note being turned into drafts. `source_text` (private; kept until the job is done, then deleted unless the owner keeps it), `masked_secrets` (likely codes and passwords found locally before any model sees the text), `status` (`drafting` · `ready` · `done` · `failed`), `usage_record_ids[]`.
+
+**`Draft`**: a proposed record waiting for a person.
+
+| Field | Type | Notes |
+|---|---|---|
+| `import_job_id?`, `template_id?` | refs | Where it came from. |
+| `target_type` | enum | `care_routine` · `medication_order` · `contact` · `place` · `item` · `knowledge_entry` · `secret` |
+| `proposed` | object | Field values, validated against the target's schema. |
+| `source_excerpt?` | text | The sentences it came from. For a medication order this becomes `instructions_verbatim`. |
+| `status` | enum | `pending` · `accepted` · `edited_and_accepted` · `rejected` |
+| `decided_by?`, `decided_at?` | | |
+
+## 2.17 Invariants (enforced by the core)
 
 1. A `Place` belongs to exactly one `Site`, the same as its parent; there are no cycles.
 2. A trackable has **at most one open** `Placement`, and its `place_id` belongs to its `site_id`. `Trackable.current_*` always mirror it.
 3. Items with `tracking = consumable` have stock and no placement; `unique` items have placement and no stock.
-4. `StockLevel.quantity = Σ StockTransaction.delta` for that item and place, and is never negative without an explicit `count_adjustment`.
+4. For counted supplies, `StockLevel.quantity = Σ StockTransaction.delta` for that item and place, and is never negative without an explicit `count_adjustment`.
 5. `CareRoutine.kind = medication` ⇔ `medication_order_id` is set; the order's pet is in `pet_ids`.
 6. An `Administration` that breaks `can_administer` is **refused** unless recorded with an explicit override reason by an owner (e.g. a vet's instruction), which raises an event.
 7. Every entity's `account_id` equals the `account_id` of everything it references.
 8. Any linked `MediaAsset` has `metadata_stripped = true`.
-9. A caregiver's access is valid only within `[engagement.starts_at − access_lead, engagement.ends_at + access_lag]` and only for the engagement's pets and sites.
-10. A billable model call starts only with a held `UsageReservation` that fits within the credit balance and every applicable `UsageLimit`.
+9. A caregiver's access is valid only within `[engagement.starts_at − access_lead, engagement.ends_at + access_lag]`, ends at `returned_at` if the owner is home early, and covers only the engagement's pets and sites.
+10. A billable model call or SMS starts only with a held `UsageReservation` that fits within the credit balance and every applicable `UsageLimit`.
 11. Credit balances and usage counters equal what the `UsageRecord` ledger implies, and can be rebuilt from it.
 12. A port request never reaches a provider whose `max_sensitivity` is below the sensitivity of the data it carries.
+13. A guest link works only within its engagement's access window and stops the moment it's revoked. Revealing a secret through it requires a verified one-time code.
+14. Template and AI output becomes a record only when a person accepts the draft. An accepted medication draft keeps its source text as `instructions_verbatim`.
+15. When anyone completes a task, every open reminder for it is superseded.
+16. Text sent to a hosted model for import has likely secrets masked first.
 
-## 2.16 Mapping from the prototype
+## 2.18 Mapping from the prototype
 
 | Prototype (`src/db/models.py`) | New model |
 |---|---|

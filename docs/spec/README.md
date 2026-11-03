@@ -1,8 +1,10 @@
 # Pawsitter product spec
 
-Status: **draft 0.2**. Decided: households first, cloud first with configurable placement, pluggable AI with metered hosted usage. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
+Status: **draft 0.3**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; and an MVP feature set based on the [feature research](06-feature-research.md). Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
 
 ## What we're building
+
+> **Hand off your pets' care without the worry.** Start with the [product offering](00-product-offering.md): who it's for, the hero features, how it compares, and what the MVP must prove.
 
 A system of record for everything needed to care for pets: the places they live and visit, where every object and supply is kept, the pets themselves, their care routines and medications, and who is allowed to look after them and when.
 
@@ -12,6 +14,7 @@ At its heart is a **core** that knows nothing about AI, chat, MCP, Discord or an
 
 | # | Document | Contents |
 |---|---|---|
+| 0 | [Product offering](00-product-offering.md) | Who it's for, the promise, hero features, journeys, comparison, packaging, MVP measures |
 | 1 | [Features](01-features.md) | Feature inventory by area, MVP vs later |
 | 2 | [Domain model](02-domain-model.md) | Entities, fields, relationships, invariants |
 | 3 | [Core architecture](03-core-architecture.md) | Commands, queries, events, ports and adapters |
@@ -32,6 +35,8 @@ These come straight from lessons learned building the hackathon prototype.
 7. **Offline-friendly identity.** IDs are client-generatable UUIDv7s, and records carry versions, so a sitter's phone can work offline and sync later.
 8. **Placement is configuration.** Anything behind a port (the model, vision, media files, encryption keys) can run in the cloud or on the owner's own hardware, chosen per account and routed by data sensitivity. Each account's structured data has exactly one home.
 9. **AI is metered and never load-bearing.** Every hosted model call goes through one gateway in the core and counts against the account's allotment. Running out pauses chat and generated prose, never care tasks or medication answers.
+10. **Reliability is the product.** A reminder that doesn't fire or a log entry that disappears breaks trust faster than any missing feature; both show up in the category's worst reviews. Delivery is tracked from sent to answered, failures fall back to another channel, and drops in delivery alert us.
+11. **AI drafts, people confirm.** Anything a model produces from the owner's notes enters the system as a draft. It becomes a record only when a person accepts it, and medication drafts keep the owner's exact words.
 
 ## Glossary
 
@@ -40,7 +45,9 @@ These come straight from lessons learned building the hackathon prototype.
 | **Account** | A tenant: a household, a professional sitter's business, or a clinic. Owns sites, pets, items and knowledge. |
 | **User** | A person who can sign in. One user can belong to many accounts, for example a sitter who works for several families. |
 | **Member** | A user's membership in an account, with a role. |
-| **Engagement** | A time-boxed care job: who cares for which pets at which sites, from when to when. Grants temporary access. |
+| **Engagement** | A time-boxed care job: who cares for which pets at which sites, from when to when. Grants temporary access. The app calls it a **trip** when the owner is away. |
+| **Sitter link** | A link that opens one engagement's care guide without an app or account. Also called a guest link. |
+| **Handback** | The owner tapping "I'm home": the engagement ends, access closes, and the stay summary goes out. |
 | **Site** | A real-world location with an address and time zone: a home, clinic, boarding facility, vacation home or vehicle. |
 | **Place** | A spot inside a site, nested to any depth: room → furniture → shelf → container. |
 | **Pet** | An animal being cared for. |
@@ -48,7 +55,7 @@ These come straight from lessons learned building the hackathon prototype.
 | **Trackable** | Anything whose location is tracked: pets and items. |
 | **Home place** | Where an item belongs, its normal storage spot. |
 | **Placement** | Where a trackable actually is or was last seen, with history. |
-| **Stock** | The quantity of a consumable at a place, with low-stock thresholds. |
+| **Stock** | How much of a consumable is at a place: a level (plenty / low / out), with an exact quantity only if the household counts it. |
 | **Medication order** | A structured prescription: drug, dose, route, frequency and safety limits. |
 | **Care routine** | A recurring care task definition: feeding, a medication, a walk, cleaning the litter box. |
 | **Task** | One occurrence of a routine, due at a specific time, with a status. |
@@ -58,3 +65,5 @@ These come straight from lessons learned building the hackathon prototype.
 | **Edge node** | A small program on the owner's own machine that offers chosen capabilities to the cloud over an outbound connection. |
 | **Allotment** | How much hosted AI an account may use per billing period, measured in credits, plus any extra limits. |
 | **Credit** | The unit an allotment is measured in. Per-model rates decide whether credits track tokens, provider cost or a blend. |
+| **Draft** | A proposed record from a template or an AI import, waiting for a person to accept, edit or reject it. |
+| **Report** | An update to the owner built from events: per visit, per day, or the stay summary at handback. |
