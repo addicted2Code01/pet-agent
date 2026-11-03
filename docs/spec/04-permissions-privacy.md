@@ -19,6 +19,9 @@
 | Set vet authorization for an engagement | ✓ | ✓ | | |
 | See the vet authorization | ✓ | ✓ | ✓ | ✓ (their engagement) |
 | End an engagement ("I'm home") | ✓ | ✓ | ✓ | |
+| Read the care thread | ✓ | ✓ | ✓ | ✓ (their engagement) |
+| Correct an assistant answer | ✓ | ✓ | ✓ | ✓ |
+| Apply a correction's draft | ✓ | ✓ | ✓ | only changes they could make themselves (where an item is, their tasks) |
 | See the account's AI usage; set usage caps | ✓ | ✓ | own usage | own usage |
 | Pair edge nodes; change capability routing | ✓ | | | |
 
@@ -53,7 +56,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - Each interface has an **egress tier**, bound to its credential ([03 §3.2](03-core-architecture.md#32-caller-context)). Integrations default to `normal`; the owner can raise one they run on their own hardware with a local model to `private`. Hosted LLMs and chat platforms (Discord, Slack) get `normal` data only, and secrets never.
 - The core's own model calls are routed by sensitivity ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)): `private` data only goes to providers on the owner's hardware, and a request never falls back to a provider that isn't allowed to see it.
 - `Context()` builds the assistant's snapshot *after* redaction for the calling interface, so redaction can't be bypassed by asking cleverly.
-- AI usage records hold token counts and costs, never prompt or reply text.
+- AI usage records hold token counts and costs, never prompt or reply text. Assistant answers to caregivers are kept only in the care thread (§4.9).
 - An edge node offers only the fixed capabilities the owner turns on. Pairing it doesn't let the cloud run commands on the owner's machine.
 - Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Medication writes through AI require the same safety checks, and can be configured to require a tap-to-confirm in the client.
 
@@ -81,3 +84,12 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 - The sitter's offline copy holds no secrets and expires with access: the app refuses to show it afterwards.
 - Discreet mode keeps medication names and health details off lock screens and out of SMS text.
 - Care-note import masks likely secrets before any hosted model sees the text, and shows the owner what will be sent ([03 §3.8.1](03-core-architecture.md#381-care-note-import)). The pasted note is deleted when the import is done unless the owner keeps it.
+
+## 4.9 Care threads
+
+- **Caregivers are told.** The thread shows a standing notice that the owner and family can read it, including the assistant's answers.
+- **Nothing is hidden during a trip.** While the engagement is active, assistant answers can't be edited or deleted, and corrected answers stay visible, marked as corrected.
+- **Thread text is stored on purpose.** It's the only place assistant text is kept; usage records still hold none (§4.4). Threads follow the activity log's retention and are included in data export. The owner can delete a thread once the engagement has ended.
+- **Everything in a thread is `normal` data**, because the caregiver can read it. Hosted models may receive it under the usual egress rules, and the owner should not post private details there.
+- **No secrets in threads.** The assistant never posts secret values; when asked, it points to the reveal button. If anyone types something that looks like a code or password, the app offers to save it as a secret instead and masks it before any hosted model sees it.
+- **Outside engagements, a member's assistant chats are private to them.** A shared household thread is V2.

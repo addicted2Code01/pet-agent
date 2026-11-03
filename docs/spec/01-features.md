@@ -5,7 +5,7 @@ Priority key: **MVP** = needed for a first paid product. **V2** = next. **Later*
 - **★** marks a differentiator: something no competitor we found offers ([00 §0.3](00-product-offering.md#03-why-it-wins)).
 - **06 #n** is the feature's rank in the [feature research](06-feature-research.md).
 
-Every feature below is a core capability. How it's surfaced (screen, chat, voice, MCP tool, bot command) is an adapter concern; see [03-core-architecture.md](03-core-architecture.md). Setup and onboarding are in [1.12](#112-setup--onboarding); what we deliberately leave out is in [1.13](#113-deliberately-not-building).
+Every feature below is a core capability. How it's surfaced (screen, chat, voice, MCP tool, bot command) is an adapter concern; see [03-core-architecture.md](03-core-architecture.md). Setup and onboarding are in [1.12](#112-setup--onboarding); what we deliberately leave out is in [1.13](#113-deliberately-not-building); the care thread, where the owner sees and corrects the AI's answers, is in [1.14](#114-care-thread--ai-oversight).
 
 ## 1.1 Accounts, people & access
 
@@ -139,7 +139,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Owner and family app with reliable push | MVP | Native shell or PWA; see Q21. |
 | **Sitter web view** from a link, no install: today's checklist, can-I-give-it, where-is, emergency card | MVP | 06 #4. |
 | Read-only offline copy of the care guide and emergency card on the sitter's phone; task completions queue while offline | MVP | Expires with access and holds no codes. Full offline editing V2 (Q14). 06 #19. |
-| AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Grounded in the household's data ("where's the leash?", "can I give it now?") plus setup help; no diagnosis. 06 #21. |
+| AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Grounded in the household's data ("where's the leash?", "can I give it now?") plus setup help; no diagnosis. Its answers to sitters appear in the care thread, where the owner can correct them (1.14). 06 #21. |
 | MCP server exposing core queries/commands as tools | V2 | Can run on the owner's own machine against the cloud API; adds no model cost. |
 | Chat bots (Discord, Slack, Telegram, SMS) | Later | Each is an adapter with its own privacy review. |
 | Voice (smart speaker) | Later | |
@@ -190,9 +190,27 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 
 | Not building | Instead | Why |
 |---|---|---|
-| In-app chat between owner and sitter | Comments on tasks and incidents; tap-to-text the owner | Households already text their sitters; chat is costly to build and run (06 #22). |
+| General-purpose chat (group chats, media albums, calls) | The care thread (1.14) for questions, answers and corrections about care; tap-to-text for everything else | Households already text their sitters; general chat is costly to build and run (06 #22). The care thread is narrower: it exists so the owner can see and correct the AI. |
 | Vet telehealth | Tap-to-call the pet's own vet and emergency vet | Funded incumbents and regulatory weight (06 #25). |
 | AI diagnosis or symptom checking | Playbooks with the owner's thresholds; call the vet | False confidence is dangerous (06 #21). |
 | Continuous GPS tracking of sitters | Timestamped tasks and photos; opt-in check-in in V2 | Battery drain and privacy (06 #17). |
 | A marketplace for finding sitters | Bring your own sitter: friends, family or a pro | Rover and Wag own that market; we make any sitter better at the job. |
 | Physical key tracking | Model a key as a tracked item if asked | A pro-sitter need (06 #26). |
+
+## 1.14 Care thread & AI oversight
+
+The owner sees everything the AI tells the sitter, and can correct it in the same stream. Corrections fix the records, so every interface gives the corrected answer, not just the AI ([03 §3.8.2](03-core-architecture.md#382-owner-corrections)).
+
+| Feature | Priority | Notes |
+|---|---|---|
+| ★ **Care thread** for each trip: the sitter's questions, the AI's answers, replies from the owner and family, and key events (doses logged, incidents) in one stream | MVP | On the sitter's link, in the owner's app and on the web. |
+| The owner sees every AI answer given to the sitter, live; the sitter is told the owner can see the thread | MVP | Answers can't be hidden or deleted during the trip. |
+| Each AI answer shows what it was based on: the records it used and when they last changed | MVP | Makes stale data easy to spot: "Based on: Cerenia schedule, updated Oct 30". |
+| ★ **Reply to correct**: the owner or family replies to an answer; it's marked "corrected" for everyone, the AI posts an updated answer, and the sitter is notified at once | MVP | Push for app users; SMS for a sitter on a link when it concerns medication. |
+| The owner's correction is pinned word for word: at the top of the sitter's view, on the task it concerns, and in every AI answer about it, until it's resolved | MVP | The owner's words always outrank the AI's. |
+| **Corrections update the plan**: the AI drafts the matching change (record a dose already given, revise a medication, skip a task, move an item, edit a note) and the owner applies it with one tap | MVP | The AI never changes records itself (principle 11). Once applied, the checklist, can-I-give-it and the care sheet all agree. |
+| Anyone in the thread can correct the AI, including the sitter ("the leash isn't in the basket") | MVP | Applying the change follows normal permissions: a sitter can record where an item is; medication changes need the owner or family. |
+| Owner notified at once of AI answers about medication, health or incidents; other answers appear in the thread and the daily report | MVP | Per trip, the owner can switch to "notify me of every answer" (Q22). |
+| How often answers get corrected, tracked as an AI quality measure | MVP | Counts only; reading a conversation to find the cause needs the owner's permission. |
+| Review mode: hold the AI's medication answers until the owner approves them | V2 | For a new sitter or a risky medication (Q23). |
+| A household thread for family outside trips | V2 | Members' own AI chats stay private by default ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |

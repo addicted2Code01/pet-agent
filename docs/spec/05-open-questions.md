@@ -82,6 +82,16 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 *Recommendation:* a thin native shell around the web app for owners and family (one codebase, reliable push), and the no-install web link with SMS reminders for sitters. This leans toward TypeScript for Q13.
 
+## Care threads
+
+**Q22. Which AI answers should notify the owner right away?** Every answer is visible in the care thread as it happens, but a notification for each one would be noise.
+
+*Recommendation:* notify at once for answers about medication, health or incidents. Show the rest in the thread and the daily report. Per trip, the owner can switch to "notify me of every answer".
+
+**Q23. Should an owner be able to hold the AI's medication answers for approval?** For a new sitter or a risky medication, an owner may want to see an answer before the sitter does.
+
+*Recommendation:* yes, in V2, as a per-trip "review mode" for medication answers. If the owner doesn't respond within a set time, the sitter sees the computed answer and the owner's written instructions, never an unreviewed AI paraphrase.
+
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
@@ -89,4 +99,4 @@ Decisions needed before building, roughly in order of how much they shape the co
 3. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 4. Write a test-first spec for the safety-critical algorithms: `can_administer` (including dated revisions), recurrence/DST, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
 5. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
-6. Plan migration of prototype data (§2.18 in the domain model).
+6. Plan migration of prototype data (§2.19 in the domain model).

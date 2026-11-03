@@ -87,6 +87,9 @@ erDiagram
     TASK ||--o{ NOTIFICATION_DELIVERY : "reminded by"
     IMPORT_JOB ||--o{ DRAFT : proposes
     TEMPLATE ||--o{ DRAFT : proposes
+    ENGAGEMENT ||--o| THREAD : "discussed in"
+    THREAD ||--o{ MESSAGE : contains
+    MESSAGE ||--o{ DRAFT : proposes
 ```
 
 ## 2.4 Identity, tenancy & access
@@ -535,7 +538,7 @@ Reminders that fire reliably are the most valued feature in the category ([06 #1
 |---|---|---|
 | `recipient` | User or GuestLink | Guest sitters have no app: medication reminders go by SMS, the rest by email or web push. |
 | `channel` | enum | `push` · `email` · `sms` · `web_push` |
-| `kind` | enum | `reminder` · `escalation` · `dose_alert` · `incident` · `update` · `report` · `readiness` |
+| `kind` | enum | `reminder` · `escalation` · `dose_alert` · `incident` · `update` · `report` · `readiness` · `thread` · `correction` |
 | `task_id?`, `subject_ids[]` | refs | |
 | `sent_at`, `delivered_at?`, `opened_at?`, `answered_at?` | instant | Receipts where the channel provides them. |
 | `superseded_at?` | instant | Set when someone completes the task: the reminder is withdrawn on every device. |
@@ -545,7 +548,7 @@ Delivery rates per channel feed the `DeliveryMonitor` job ([03 §3.6](03-core-ar
 
 ## 2.16 Setup: templates & import drafts
 
-Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranked-features)). Templates and AI import both produce **drafts**; nothing becomes a record until a person accepts it.
+Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranked-features)). Templates, AI import and corrections in a care thread (2.17) all produce **drafts**; nothing becomes a record until a person accepts it.
 
 **`Template`**: *not account-scoped.* A starter set such as `cat`, `dog`, `puppy` or `senior_on_medication`: routines, knowledge prompts ("What's normal for her?"), playbooks and place suggestions.
 
@@ -555,14 +558,43 @@ Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranke
 
 | Field | Type | Notes |
 |---|---|---|
-| `import_job_id?`, `template_id?` | refs | Where it came from. |
-| `target_type` | enum | `care_routine` · `medication_order` · `contact` · `place` · `item` · `knowledge_entry` · `secret` |
+| `import_job_id?`, `template_id?`, `source_message_id?` | refs | Where it came from: a template, an import, or a correction in a care thread. |
+| `action` | enum | `create` · `revise` (change an existing record) · `record` (log something that happened, such as a dose given before the owner left) |
+| `target_type` | enum | `care_routine` · `medication_order` · `administration` · `task` · `placement` · `contact` · `place` · `item` · `knowledge_entry` · `secret` |
+| `target_id?` | ref | The record a `revise` changes. |
 | `proposed` | object | Field values, validated against the target's schema. |
-| `source_excerpt?` | text | The sentences it came from. For a medication order this becomes `instructions_verbatim`. |
+| `source_excerpt?` | text | The words it came from. For a new medication order this becomes `instructions_verbatim`; for a correction it's the owner's message. |
 | `status` | enum | `pending` · `accepted` · `edited_and_accepted` · `rejected` |
 | `decided_by?`, `decided_at?` | | |
 
-## 2.17 Invariants (enforced by the core)
+## 2.17 Care threads
+
+Every answer the assistant gives a caregiver during an engagement lives in a thread the owner can see and correct ([01 §1.14](01-features.md#114-care-thread--ai-oversight), [03 §3.8.2](03-core-architecture.md#382-owner-corrections)).
+
+**`Thread`**: one per engagement. A household thread outside engagements is V2.
+
+| Field | Type | Notes |
+|---|---|---|
+| `engagement_id?` | Engagement | |
+| `participants` | refs | Owner, family, and the caregiver or guest link. The assistant posts as itself. |
+| `notify_policy` | enum | `important` (medication, health and incidents notify the owner at once; the default) · `every_answer` |
+
+**`Message`**
+
+| Field | Type | Notes |
+|---|---|---|
+| `thread_id` | Thread | |
+| `author` | Actor | A user, a guest, the assistant, or `system` for inline events. |
+| `kind` | enum | `question` · `answer` · `reply` · `correction` · `event` (a dose logged, an incident) · `system` |
+| `body` | text | Stored as written. Text that looks like a code or password is offered as a secret instead ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
+| `reply_to_id?` | Message | |
+| `sources[]` | `{subject_id, version}` | For assistant answers: the records it used and their versions at the time, shown as "Based on: Cerenia schedule, updated Oct 30". |
+| `topics` | set | `medication` · `health` · `incident` · `location` · `routine` · `other`. Drives notifications. |
+| `status` | enum | `active` · `corrected` (someone corrected it) · `superseded` (an updated answer replaced it) |
+| `corrected_by_id?` | Message | The correction that flagged it. |
+| `resolution?` | enum | For corrections: `open` · `applied` (its drafts were accepted) · `dismissed` · `expired` (the engagement ended). A correction is pinned while `open`. |
+
+## 2.18 Invariants (enforced by the core)
 
 1. A `Place` belongs to exactly one `Site`, the same as its parent; there are no cycles.
 2. A trackable has **at most one open** `Placement`, and its `place_id` belongs to its `site_id`. `Trackable.current_*` always mirror it.
@@ -580,8 +612,11 @@ Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranke
 14. Template and AI output becomes a record only when a person accepts the draft. An accepted medication draft keeps its source text as `instructions_verbatim`.
 15. When anyone completes a task, every open reminder for it is superseded.
 16. Text sent to a hosted model for import has likely secrets masked first.
+17. During an engagement, every assistant answer to a caregiver is stored in that engagement's thread, is visible to the owner, and can't be edited or deleted while the engagement is active.
+18. A correction changes records only through drafts applied by someone allowed to make that change, using the same commands and safety checks as any other edit.
+19. An open correction is included in every assistant context for its scope, ahead of everything else, and shown word for word with any computed answer it concerns.
 
-## 2.18 Mapping from the prototype
+## 2.19 Mapping from the prototype
 
 | Prototype (`src/db/models.py`) | New model |
 |---|---|

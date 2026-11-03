@@ -115,7 +115,7 @@ D·I·F = Demand · Impact · Fit.
 
 ## 6.6 Recommended changes to the spec
 
-All of these were applied in draft 0.3. The "Spec today" column in §6.3 shows the spec as it was before that.
+All of these were applied in draft 0.3. The "Spec today" column in §6.3 shows the spec as it was before that. Draft 0.4 then added a care thread at the owner's request ([01 §1.14](01-features.md#114-care-thread--ai-oversight)): narrower than the general chat ruled out in #22, it exists so the owner can see and correct the AI's answers to sitters.
 
 | Change | Where | Features |
 |---|---|---|

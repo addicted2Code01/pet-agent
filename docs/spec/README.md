@@ -1,6 +1,6 @@
 # Pawsitter product spec
 
-Status: **draft 0.3**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; and an MVP feature set based on the [feature research](06-feature-research.md). Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
+Status: **draft 0.4**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); and owner oversight of every AI answer given to a sitter, through the care thread. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
 
 ## What we're building
 
@@ -36,7 +36,7 @@ These come straight from lessons learned building the hackathon prototype.
 8. **Placement is configuration.** Anything behind a port (the model, vision, media files, encryption keys) can run in the cloud or on the owner's own hardware, chosen per account and routed by data sensitivity. Each account's structured data has exactly one home.
 9. **AI is metered and never load-bearing.** Every hosted model call goes through one gateway in the core and counts against the account's allotment. Running out pauses chat and generated prose, never care tasks or medication answers.
 10. **Reliability is the product.** A reminder that doesn't fire or a log entry that disappears breaks trust faster than any missing feature; both show up in the category's worst reviews. Delivery is tracked from sent to answered, failures fall back to another channel, and drops in delivery alert us.
-11. **AI drafts, people confirm.** Anything a model produces from the owner's notes enters the system as a draft. It becomes a record only when a person accepts it, and medication drafts keep the owner's exact words.
+11. **AI drafts, people confirm.** Anything a model produces from the owner's notes enters the system as a draft. It becomes a record only when a person accepts it, and medication drafts keep the owner's exact words. Corrections work the same way: the owner's words are pinned for the sitter at once, and the matching change to the records is applied with one tap.
 
 ## Glossary
 
@@ -67,3 +67,5 @@ These come straight from lessons learned building the hackathon prototype.
 | **Credit** | The unit an allotment is measured in. Per-model rates decide whether credits track tokens, provider cost or a blend. |
 | **Draft** | A proposed record from a template or an AI import, waiting for a person to accept, edit or reject it. |
 | **Report** | An update to the owner built from events: per visit, per day, or the stay summary at handback. |
+| **Care thread** | The stream for one trip where the sitter's questions, the AI's answers, the owner's replies and key events appear together. The owner sees everything in it. |
+| **Correction** | A reply in the care thread saying an answer is wrong. It's pinned for the sitter until the matching change to the records is applied or dismissed. |

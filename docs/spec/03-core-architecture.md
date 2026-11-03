@@ -62,6 +62,7 @@ Each command validates input, checks policy, enforces invariants, writes through
 | Care | `CreateRoutine`, `UpdateRoutine`, `PauseRoutine`, `CompleteTask`, `SkipTask`, `SnoozeTask`, `UndoTaskCompletion` (time-limited), `AnswerReminder` (Taken / Snooze / Skip from a notification; becomes `RecordAdministration`, `CompleteTask`, `SnoozeTask` or `SkipTask`) |
 | Setup | `ApplyTemplate`, `ImportCareNote`, `AcceptDraft`, `EditDraft`, `RejectDraft` |
 | Notifications | `SetNotificationPreferences` |
+| Care threads | `PostMessage`, `CorrectAnswer` (a reply that flags an answer as wrong), `ResolveCorrection` (applied or dismissed), `SetThreadNotifications` |
 | Knowledge | `CreateKnowledgeEntry`, `ReviseKnowledgeEntry`, `ArchiveKnowledgeEntry`, `CreateSecret`, `RotateSecret`, `RevealSecret` (a command, because it's logged) |
 | Contacts | `CreateContact`, `UpdateContact`, `LinkContact`, `UnlinkContact` |
 | Media | `BeginUpload` → `CompleteUpload` (strips metadata, makes variants), `LinkMedia`, `UnlinkMedia` |
@@ -92,13 +93,16 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
 | `AiUsage(scope, period)` | Used and remaining for the credit balance and each limit; breakdown by member, purpose and model; reset time; projected run-out date. |
 | `Readiness(engagement_id)` | Whether the trip is ready: sitter link sent and opened; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). |
-| `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge. This is the generalized "send everything in the prompt" from the prototype. |
+| `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: open owner corrections word for word, first; then the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge. This is the generalized "send everything in the prompt" from the prototype. |
+| `Thread(engagement_id, since?)` | The care thread: messages with their sources and statuses, open corrections pinned first. |
+| `OpenCorrections(scope)` | Corrections not yet applied or dismissed, with their drafts. |
 
 ## 3.5 Events
 
 Every command emits one or more events (`2.12 Event`), stored in the same transaction (transactional outbox) and then published through `EventPublisher`. Consumers are adapters or core jobs:
 - the **notifier** (task reminders, overdue escalation, refused or missed doses, low stock, urgent incidents, engagement starting)
 - **report** assembly (visit, daily and stay reports)
+- the **care thread** (doses, incidents and task changes appear inline, next to the conversation)
 - the **search index** updater
 - **sync** to offline clients
 - analytics, webhooks and integrations (later)
@@ -154,6 +158,7 @@ The assistant is a driving adapter with this loop:
 3. The model chooses tools and phrases results. **Facts come only from tool results**: doses and times are quoted from `CanAdminister` and `instructions_verbatim`, never computed by the model.
 4. Writes requested through the assistant ("I gave him his pill") go through the same commands, so they're validated, safety-checked and logged as *assistant on behalf of Jane*.
 5. The assistant's own model calls go through the `ModelGateway` (§3.10), so they're routed by sensitivity and metered against the account's allotment.
+6. During an engagement, every answer is posted to the care thread with its `sources` (the records and versions it used), so the owner sees it live and can correct it (§3.8.2).
 
 An assistant the owner runs on their own hardware with a local model is just another interface with its own credential: it calls the public API like any other client, and the gateway and metering don't apply.
 
@@ -169,6 +174,25 @@ The other model use in MVP turns the note an owner already leaves for sitters in
 4. **Confirm.** The owner accepts, edits or rejects each `Draft`. Nothing becomes a record without a person accepting it (principle 11). An accepted medication draft keeps its source sentences as `instructions_verbatim`, and masked secrets come back as secret drafts filled in locally from the original text.
 
 New accounts get onboarding credits for this ([00 §0.7](00-product-offering.md#07-packaging-proposal)), so setup never hits a paywall. Owners with an edge node can route import to their local model, which may see the unmasked text.
+
+### 3.8.2 Owner corrections
+
+The assistant has no memory of its own. What it "knows" is the household's records, read fresh through `Context()` and the query tools on every turn. So a correction has to change the records, and once it does, every interface gives the corrected answer: the assistant, the sitter's checklist, `CanAdminister` and the care sheet. Teaching only the chat would leave the checklist still saying "give it".
+
+**Example.** The sitter asks "What do I do next?" and the assistant answers "Give Sonic his Cerenia". The owner replies in the thread: "No, I gave it at 7 before I left."
+
+1. **Flag.** The reply is posted as a `correction` of that answer (`CorrectAnswer`). The answer is marked *corrected* for everyone, and the sitter is notified at once: push in the app, or SMS for a sitter on a link when it concerns medication.
+2. **Pin.** Until the correction is resolved, the owner's words are pinned at the top of the sitter's view, on the task they concern, and first in every assistant context for that scope (invariant 19). The assistant must show them with any computed answer they concern, and never contradict them.
+3. **Re-answer.** The assistant posts an updated answer that quotes the owner: "Jane says she gave Cerenia at 7:00. Don't give it now."
+4. **Draft the fix.** The assistant proposes the matching change as a `Draft` linked to the correction: here, `record` an administration of Cerenia at 07:00 by Jane. Other corrections become other drafts: revise a medication order, skip a task, move an item, revise a knowledge entry.
+5. **Apply.** The owner applies it with one tap. It runs through the normal command (`RecordAdministration`, `ReviseMedicationOrder`, …) with the owner's permissions and every safety check. `CanAdminister` now says "not until 07:00 tomorrow", the correction is resolved, and the pin comes down.
+
+Rules:
+- **The assistant never applies a correction itself.** It only drafts; a person allowed to make the change applies it (principle 11). An unapplied correction stays pinned, so the owner's words keep governing the sitter's view even if nobody taps Apply.
+- **Even cautious corrections are drafts.** "Don't give it" never becomes an automatic hold: if the assistant misread "give it with food" as "don't give it", a hold could block a dose that matters. The owner's words are pinned instead.
+- **Anyone in the thread can correct the assistant**, including the sitter ("The leash isn't in the basket"). Who can apply the resulting draft follows normal permissions: a sitter can record where an item is, but medication changes need the owner or family.
+- **If the sitter already acted** on the answer, the logged dose appears in the thread next to the correction, so the owner sees it at once and can follow the medication's instructions or call the vet.
+- **Corrections are measured.** How often answers get corrected is an AI quality measure ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)). Finding the cause (stale records, or a wrong answer from correct records) means reading the conversation, which needs the owner's permission.
 
 The **MCP server** is the same tool set exposed over MCP, so any MCP-capable client gets exactly the same safe behavior. Chat bots are thin adapters on top of the assistant.
 

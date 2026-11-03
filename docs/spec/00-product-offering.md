@@ -14,11 +14,11 @@ The people they hand off to (sitters, dog walkers, friends, family) use it free,
 
 > **Hand off your pets' care without the worry.**
 
-Pawsitter keeps your pets' care in one place your family uses every day, and hands it to a sitter in minutes. Your sitter gets a link, not an app: what to do next, where everything is, and whether a dose is safe to give. You get photo updates as it happens, and their access ends when you're home.
+Pawsitter keeps your pets' care in one place your family uses every day, and hands it to a sitter in minutes. Your sitter gets a link, not an app: what to do next, where everything is, and whether a dose is safe to give. You see every answer the AI gives them, and one reply corrects it for everyone. You get photo updates as it happens, and their access ends when you're home.
 
 ## 0.3 Why it wins
 
-Four hero features that no competitor we found offers in full, plus a daily habit that keeps everything current.
+Five hero features that no competitor we found offers in full, plus a daily habit that keeps everything current.
 
 | Hero feature | What the customer gets | Features |
 |---|---|---|
@@ -26,6 +26,7 @@ Four hero features that no competitor we found offers in full, plus a daily habi
 | **Everything findable** | "Where's the leash?" answered with the spot and a photo. Supplies marked low go straight onto the shopping list. | [1.4](01-features.md#14-items-supplies--inventory) |
 | **Access that ends when you're home** | A sitter link that opens and closes with the job. Door codes revealed one at a time, with a log. Vet authorization with a spending limit. | [1.1](01-features.md#11-accounts-people--access), [1.2](01-features.md#12-sites--places), [1.7](01-features.md#17-knowledge-contacts--emergencies) |
 | **Ready in 10 minutes** | Paste the note you already leave for sitters; AI drafts the setup and you confirm each entry. | [1.12](01-features.md#112-setup--onboarding) |
+| **You stay in the loop** | Every answer the AI gives your sitter appears in the trip's care thread. Reply to correct it: your words are pinned for the sitter at once, and one tap fixes the plan everywhere. | [1.14](01-features.md#114-care-thread--ai-oversight) |
 
 **The everyday hook.** Sitter apps get used a few times a year, so their information goes stale. Pawsitter's reminders and shared log are useful every day ("did anyone feed the dog?"), so the family keeps it current and it's ready the moment a sitter is needed. A whole category of small apps exists only to answer that question (06 #2), which shows the demand.
 
@@ -46,7 +47,7 @@ Customers expect these from any app in this space. All are in the MVP:
 1. **Set up (10 minutes).** Pick a template or paste your existing care note, then confirm the drafted routines, medications and contacts. Snap photos of where the food, leash and medicine live. Invite your family. ([1.12](01-features.md#112-setup--onboarding))
 2. **Every day.** Family members get reminders. Whoever feeds or medicates taps Done, and everyone else's reminder clears. Supplies marked low go on the shopping list. ([1.6](01-features.md#16-care-routines--daily-tasks), [1.4](01-features.md#14-items-supplies--inventory))
 3. **Going away.** Create a trip: dates, sitter, pets and vet authorization. A readiness check flags gaps, such as no emergency vet, a medication without "if missed" instructions, or supplies running low. Send the sitter link. ([1.1](01-features.md#11-accounts-people--access), [1.10](01-features.md#110-platform))
-4. **During the stay.** The sitter opens the link and sees today's checklist, can-I-give-it, where things are and the emergency card, with an offline copy. Reminders reach them by SMS or push. The owner gets photo updates, and an alert at once if a dose is refused or missed. ([1.9](01-features.md#19-interfaces-adapters-not-core), [1.8](01-features.md#18-activity-reporting--notifications))
+4. **During the stay.** The sitter opens the link and sees today's checklist, can-I-give-it, where things are and the emergency card, with an offline copy. Reminders reach them by SMS or push. Their questions to the AI, and its answers, appear in the care thread, where the owner can correct them. The owner gets photo updates, and an alert at once if a dose is refused or missed. ([1.9](01-features.md#19-interfaces-adapters-not-core), [1.8](01-features.md#18-activity-reporting--notifications), [1.14](01-features.md#114-care-thread--ai-oversight))
 5. **Coming home.** Tap "I'm home". The sitter's access closes, both get the stay summary, and the shared log carries on. ([1.1](01-features.md#11-accounts-people--access), [1.8](01-features.md#18-activity-reporting--notifications))
 
 ## 0.6 How it compares
@@ -64,10 +65,11 @@ By category, as each product advertises itself ([06](06-feature-research.md)). �
 | Emergency contacts and vet authorization | ◐ | – | – | – | – | ✓ |
 | Setup from the notes you already have | – | – | – | – | – | ✓ |
 | AI answers from your own household's data | – | – | – | – | ◐ | ✓ |
+| Owner sees and can correct what the AI tells the sitter | – | – | – | – | – | ✓ |
 
 **Price is a wedge too.** Competitors charge to share: Pawzfolio's $4.99/month tier is what unlocks sharing, and Muzzly and PetPill put sharing in paid tiers. Sharing with a sitter is free in Pawsitter (§0.7).
 
-**What we don't do:** find sitters, run in-app chat, offer vet telehealth or diagnose. Rover and Wag own sitter-finding; we make any sitter better at the job ([1.13](01-features.md#113-deliberately-not-building)).
+**What we don't do:** find sitters, run general-purpose chat (the care thread is only about care), offer vet telehealth or diagnose. Rover and Wag own sitter-finding; we make any sitter better at the job ([1.13](01-features.md#113-deliberately-not-building)).
 
 ## 0.7 Packaging (proposal)
 
@@ -98,6 +100,7 @@ The MVP is everything marked MVP in [01](01-features.md), organized around the f
 | Medication doses during stays logged within their window | 95 % or better | The safety outcome we promise |
 | Too-soon or double doses caught by the dose check | Count and report | Proof the safety promise works, and a number to market with |
 | Sitters who say the guide had everything they needed (one tap at handback) | 90 % or better | The handoff is the product |
+| AI answers corrected by owners | Track the rate; review causes with the owner's permission | Each correction shows where the records or the model need fixing |
 | New households that send a sitter link within 30 days | Set after the beta | Activation |
 | Households active weekly between trips | Set after the beta | The everyday hook |
 
