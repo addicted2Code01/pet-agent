@@ -92,14 +92,13 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 *Recommendation:* yes, in V2, as a per-trip "review mode" for medication answers. If the owner doesn't respond within a set time, the sitter sees the computed answer and the owner's written instructions, never an unreviewed AI paraphrase.
 
-**Q24. Which channels ship first?** The model supports any channel from day one; each adapter is extra work, cost and privacy review.
-
-*Recommendation:* MVP: the app, the website, the sitter link and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. V2: WhatsApp, which many sitters prefer but which charges per conversation and requires approved templates outside a 24-hour window, and Discord, where the prototype already had a bot. Later: Slack, Telegram and replies by email.
+**Q24. Which channels ship first?** ✅
+*Decided:* MVP ships the app, the website, the sitter link and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. WhatsApp and Discord come in V2: WhatsApp charges per conversation and requires approved templates outside a 24-hour window, and Discord already had a bot in the prototype. Slack, Telegram and replies by email come later. The model supports any channel from day one, so adding one is an adapter, not a model change.
 
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q13 (core language), Q20 (name), Q21 (owner app) and Q24 (first channels), which shape the first build.
+2. Decide Q13 (core language), Q20 (name) and Q21 (owner app), which shape the first build.
 3. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 4. Write a test-first spec for the safety-critical algorithms: `can_administer` (including dated revisions), recurrence/DST, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
 5. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
