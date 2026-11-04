@@ -14,9 +14,12 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Sign up, sign in, multiple accounts per user | MVP | A sitter has one login across every family they work for. |
 | Account members with roles: owner, admin, family, caregiver | MVP | See [04-permissions-privacy.md](04-permissions-privacy.md). |
 | Invite by link or email, accept or decline | MVP | |
-| **Sitter link**: a caregiver opens their care guide from a link, with no app or account | MVP | Decided (Q11). Tied to one engagement, expires with it, revocable. Revealing a door code needs a one-time code sent to the sitter's phone ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)). 06 #4. |
+| **Sitter join by QR**: a code the owner sends, shows on a screen or prints gets a sitter set up in about a minute, with no app, password or sign-up form. A second factor binds it to the right person: a code to the contact the owner entered, or the owner's approval. | MVP | Each sitter becomes a lightweight user whose access is bounded by the trip and revocable at once (Q11, revised). Cloud sitters have one login across households ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in), [§8.7](08-home-and-cloud.md#87-joining-by-qr)). Revealing a door code needs a step-up ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)). 06 #4. |
+| **Linked devices**: owners see every person's devices, and revoke one device or a whole person, effective on the next request | MVP | A device joined in one household never opens another ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
+| **Owner approval** of new devices, with match words shown on both screens | MVP | The join check for printed cards and sitters with no contact on file ([08 §8.6](08-home-and-cloud.md#86-home-sign-in-options)). |
+| **Security log**: every join, approval, step-up, door-code reveal and revocation, visible to owners | MVP | Kept at least 1 year. |
 | ★ **Engagements**: time-boxed care jobs granting a caregiver access to chosen pets and sites | MVP | Access opens shortly before the job starts and closes after it ends. 06 #12. |
-| **Trip setup**: dates, sitter and pets in one flow, producing the sitter link, the care plan for the stay and a readiness check | MVP | The "going away" journey ([00 §0.5](00-product-offering.md#05-core-journeys)). |
+| **Trip setup**: dates, sitter and pets in one flow, producing the sitter's join link and QR, the care plan for the stay and a readiness check | MVP | The "going away" journey ([00 §0.5](00-product-offering.md#05-core-journeys)). |
 | Visit types: drop-in visits (with planned windows), overnight stays, boarding at another site | MVP | |
 | **"I'm home" handback**: the owner ends the engagement; the sitter's access closes and both get the stay summary | MVP | Replaces the "text me when you're back" ritual. 06 #23. |
 | Proof of care: every completed task is timestamped, with optional photo evidence | MVP | Proof without tracking anyone. 06 #17. |
@@ -126,6 +129,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | **Stay summary** at handback: what was done, on time or late, photos, incidents | MVP | 06 #23. |
 | **Push notifications** for reminders, escalations, refused or missed doses, urgent incidents and photo updates; email as backup | MVP | Email-only updates get missed (06 #3). Decided (Q15). |
 | Reminders for sitters without the app: SMS for medications, email or web push for the rest | MVP | SMS is metered like AI ([03 §3.10](03-core-architecture.md#310-ai-usage-metering)). |
+| SMS sender numbers from a pool, one per sitter and household, so a reply from a sitter with two households reaches the right one | MVP | Ambiguous replies are never applied; "STOP" affects one sender only ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)). |
 | **Discreet notifications**: hide medication names on the lock screen | MVP | 06 #24. |
 | Notification preferences: channels, quiet hours, discreet mode | MVP | Medication reminders can be set to override quiet hours. |
 | Notifications on WhatsApp and Discord | V2 | The same channels as the care thread (1.14). Slack and Telegram later. |
@@ -139,7 +143,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Web app: owner management + caregiver view | MVP | |
 | Owner and family app with reliable push | MVP | Native shell or PWA; see Q21. |
 | **Sitter web view** from a link, no install: today's checklist, can-I-give-it, where-is, emergency card | MVP | 06 #4. |
-| Read-only offline copy of the care guide and emergency card on the sitter's phone; task completions queue while offline | MVP | Expires with access and holds no codes. Full offline editing V2 (Q14). 06 #19. |
+| Read-only offline copy of the care guide and emergency card on the sitter's phone; task completions queue while offline | MVP | Needs a secure (HTTPS) origin. Holds no codes, tasks only 48 hours ahead, and is encrypted under a key the server leases for 24 to 48 hours. Queued entries are never lost when a trip ends ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). Full offline editing V2 (Q14). 06 #19. |
 | AI assistant: natural-language Q&A and actions over core queries/commands | MVP | Grounded in the household's data ("where's the leash?", "can I give it now?") plus setup help; no diagnosis. Its answers to sitters appear in the care thread, where the owner can correct them (1.14). 06 #21. |
 | MCP server exposing core queries/commands as tools | V2 | Can run on the owner's own machine against the cloud API; adds no model cost. |
 | Chat channels for the care thread and the assistant: WhatsApp, Discord | V2 | Two-way SMS is MVP (1.14). Slack and Telegram later. Each channel gets its own privacy review. |
@@ -159,7 +163,10 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Per-account capability routing: which provider serves the model, vision, media and keys, by data sensitivity | MVP | Cloud providers only at first; see [03 §3.9](03-core-architecture.md#39-deployment-and-placement). |
 | Edge node: run the model and vision, and keep private media and chosen secret keys, on the owner's own hardware | V2 | Dials out to the cloud; no port forwarding. |
 | Engagement readiness check: warn the owner if something a sitter needs is missing or offline | MVP | Part of trip setup (1.1). Checks for home-held keys arrive with the edge node (V2). |
-| Self-hosted edition: core and data on the owner's hardware, with a cloud relay for sitters | Later | The original prototype's local-first story. |
+| **Home edition**: the core and household data on the owner's always-on Mac, Windows PC or NAS, reached through Pawsitter's relay at its own HTTPS name | V2 | The beta covers the container image and macOS; GA adds Windows and the tray app ([08](08-home-and-cloud.md)). The original prototype's local-first story. |
+| Companion services for home installs: relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates | V2 | They hold routing data or ciphertext, not care records ([08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees)). |
+| Home outage fallbacks: backup reminders from the cloud and door codes staged on the sitter's phone | V2 | Required before a home medication trip is "ready" ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| Home backups: encrypted off-site backup of the structured data, and restore onto new hardware under the same name | V2 | Free ([08 §8.12](08-home-and-cloud.md#812-backups-keys-and-recovery-at-home)). |
 | Billing and plans: Free and Plus | V2 | Proposal in [00 §0.7](00-product-offering.md#07-packaging-proposal). AI allotments ship in MVP regardless; see 1.11. |
 
 ## 1.11 AI usage & allotments
@@ -215,7 +222,7 @@ The owner sees everything the AI tells the sitter, and can correct it in the sam
 | **Corrections update the plan**: the AI drafts the matching change (record a dose already given, revise a medication, skip a task, move an item, edit a note) and the owner applies it with one tap | MVP | The AI never changes records itself (principle 11). Once applied, the checklist, can-I-give-it and the care sheet all agree. |
 | Anyone in the thread can correct the AI, including the sitter ("the leash isn't in the basket") | MVP | Applying the change follows normal permissions: a sitter can record where an item is; medication changes need the owner or family. |
 | Owner notified at once of AI answers about medication, health or incidents; other answers appear in the thread and the daily report | MVP | Per trip, the owner can switch to "notify me of every answer" (Q22). |
-| **One thread, every channel**: messages from the app, the website, the sitter link, SMS, WhatsApp, Discord and others combine into the trip's thread, each marked with where it came from | MVP | The model is channel-independent from day one. MVP channels: app, web, sitter link and two-way SMS; WhatsApp and Discord in V2 (decided, Q24). |
+| **One thread, every channel**: messages from the app, the website, SMS, WhatsApp, Discord and others combine into the trip's thread, each marked with where it came from | MVP | The model is channel-independent from day one. MVP channels: app, web, sitter link and two-way SMS; WhatsApp and Discord in V2 (decided, Q24). |
 | Each person chooses their channels and gets the whole thread there: a sitter on WhatsApp sees the owner's reply from Discord | MVP | One message, many deliveries; never duplicated. |
 | Correct from any channel: a native reply (a WhatsApp quote, a Discord reply) targets that answer; on SMS the latest answer is assumed, or the AI asks which | MVP | |
 | **Combined views**: the owner's inbox across all threads and channels, and a timeline per trip or pet merging the conversation with events | MVP | Owner and sitter each see everything they're allowed to. |

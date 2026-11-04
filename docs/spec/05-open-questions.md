@@ -38,7 +38,9 @@ Decisions needed before building, roughly in order of how much they shape the co
 ## Access & collaboration
 
 **Q11. Do caregivers need an account to help?** ✅
-*Decided:* no. A sitter link opens the care guide without an app or account, scoped to one engagement and expiring with it. Every care-guide competitor leads with this ([06 #4](06-feature-research.md#63-ranked-features)). Revealing a door code needs a one-time code sent to the sitter's phone or email, and links never carry private data ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)).
+*Decided (revised 2026-11-04):* no app, no password and no sign-up form, but every sitter becomes a lightweight **user** when they join. Joining is by a QR code the owner sends, shows or prints, confirmed by a code to the contact the owner entered or by the owner's approval. Access is bounded by the trip and revocable at once, and every action is attributed to a person and device. Cloud sitters have one login across households; home sitters are local to the install.
+
+This replaces the earlier no-account sitter link. Every care-guide competitor still leads with "no app" ([06 #4](06-feature-research.md#63-ranked-features)), and that promise holds. See [08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in) to [§8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses) and [04 §4.2](04-permissions-privacy.md#42-time-boxed-access).
 
 **Q12. Can the owner see a caregiver's location** (check-in geofence)? It's useful for pros and sensitive for friends.
 
@@ -94,7 +96,7 @@ Decisions needed before building, roughly in order of how much they shape the co
 *Recommendation:* yes, in V2, as a per-trip "review mode" for medication answers. If the owner doesn't respond within a set time, the sitter sees the computed answer and the owner's written instructions, never an unreviewed AI paraphrase.
 
 **Q24. Which channels ship first?** ✅
-*Decided:* MVP ships the app, the website, the sitter link and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. WhatsApp and Discord come in V2: WhatsApp charges per conversation and requires approved templates outside a 24-hour window, and Discord already had a bot in the prototype. Slack, Telegram and replies by email come later. The model supports any channel from day one, so adding one is an adapter, not a model change.
+*Decided:* MVP ships the app, the website (which sitters use after joining) and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. WhatsApp and Discord come in V2: WhatsApp charges per conversation and requires approved templates outside a 24-hour window, and Discord already had a bot in the prototype. Slack, Telegram and replies by email come later. The model supports any channel from day one, so adding one is an adapter, not a model change.
 
 ## Runtime
 
@@ -106,11 +108,49 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 *Recommendation:* shift it to the first valid time after the gap and flag it to the caregiver. In the autumn overlap, use the first occurrence. Store the policy on each schedule, so it can be changed per medication.
 
+## Home and cloud editions
+
+From the home and cloud design ([08](08-home-and-cloud.md)).
+
+**Q27. Should the home edition be relay-first?** With relay-first, every install gets its own HTTPS name, reached through Pawsitter's relay from any network. The alternative is LAN-first with the relay optional. That leaves sitters on guest Wi-Fi or mobile data, and owners away on the trip, with no access by default, and plain HTTP on the LAN disables passkeys, the offline copy and push.
+
+*Recommendation:* relay-first. Accept that remote access, push, SMS and certificates need the internet, and cover outages with Q29's fallbacks rather than a plain-HTTP mode.
+
+**Q28. Which home sign-in options, and which defaults?** The menu is in [08 §8.6](08-home-and-cloud.md#86-home-sign-in-options): paired devices, passkeys, a code to the contact the owner entered, owner approval, a personal PIN, a Pawsitter account, the console, a kiosk, trusted home Wi-Fi, and a shared household PIN.
+
+*Recommendation:*
+- Owners: passkeys with a printed recovery kit.
+- Sitters: a QR join confirmed by a code, or by owner approval when there's no contact on file.
+- Offline step-up: a personal PIN.
+- The beta ships just that preset. The kiosk and Pawsitter-account sign-in come at GA. Leave out trusted home Wi-Fi and the shared PIN unless interviews show owners insist, and even then offer only read-only views.
+
+**Q29. How does a home medication trip survive the house going dark?** At home, a power or internet outage would stop reminders and door-code reveals.
+
+*Recommendation:* decide before the home beta, with three parts.
+- **Backup reminders from the cloud:** a discreet 48-hour schedule that fires only if the home hasn't marked the dose done. On by default for medication trips; owners can opt out after a warning.
+- **Door codes staged on the sitter's phone** for the access window, after a step-up.
+- **A readiness gate** that won't call a medication trip "ready" without both.
+
+**Q30. The home-zone domain.** Every home install's name lives under it, so passkeys and printed cards depend on it never changing.
+
+*Recommendation:* after the product name (Q20), register a separate domain for long-term use and apply for the Public Suffix List. Run the beta on a separate, invite-only zone until the listing ships in browsers.
+
+**Q31. What's free in the home edition?**
+
+*Recommendation:*
+- **Free:** sitter access through the relay; reminders, push and the watchdog; backup reminders; staged door codes; encrypted off-site backup of the structured data. This keeps the promise that sharing is free and safety isn't paywalled.
+- **Plus:** relay bandwidth above a cap, media backup, and the hosted assistant.
+
+**Q32. Is the native iOS owner app in the cloud MVP?** It's the only way to get Taken / Snooze / Skip on the lock screen, and time-sensitive reminders, on Apple devices. For home installs, iOS limits on per-install web addresses in an app still need testing ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)).
+
+*Recommendation:* yes, for the cloud MVP. Test per-install addresses on real devices before the home beta, with Pawsitter-account sign-in as the fallback.
+
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q20 (name), Q21 (owner app), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build.
-3. Write command/query schemas (inputs, outputs, errors) for the MVP set.
-4. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
-5. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
-6. Plan migration of prototype data (§2.19 in the domain model).
+2. Decide Q20 (name), Q21 (owner app), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build, and Q27 to Q32 before the home beta.
+3. Start the long-lead items for the home edition now ([08 §8.17](08-home-and-cloud.md#817-phasing)): register the home zone, apply for the Public Suffix List, request Let's Encrypt's rate-limit exemption, and set up a backup CA.
+4. Write command/query schemas (inputs, outputs, errors) for the MVP set.
+5. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
+6. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
+7. Plan migration of prototype data (§2.19 in the domain model).

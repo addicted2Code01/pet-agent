@@ -93,7 +93,10 @@ erDiagram
     ACCOUNT ||--o{ USAGE_RECORD : meters
     USAGE_RECORD }o--|| MODEL_RATE : "priced by"
 
-    ENGAGEMENT ||--o{ GUEST_LINK : "opened via"
+    ENGAGEMENT ||--o{ JOIN_GRANT : "joined via"
+    USER ||--o{ DEVICE : uses
+    DEVICE ||--o{ DEVICE_GRANT : holds
+    DEVICE_GRANT }o--|| ACCOUNT : "for"
     ENGAGEMENT ||--o| REPORT : "summarized by"
     VISIT ||--o| REPORT : "reported by"
     TASK ||--o{ NOTIFICATION_DELIVERY : "reminded by"
@@ -118,6 +121,10 @@ erDiagram
 | `email`, `phone?` | string | Verified contact points. |
 | `locale`, `time_zone` | string | For notifications and display; schedules use the site's zone, not the user's. |
 | `auth_subject` | string | Opaque id from the identity port (OIDC, passkeys…). |
+| `kind` | enum | `full` · `lightweight` (created by a QR join: no password; can add a passkey later) |
+| `identity_origin` | string | `cloud` (Pawsitter ID: one login across households) or `install:<id>` (local to one home install) ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)) |
+| `verified_contacts[]` | | Phones and email addresses verified by a code. |
+| `pid_subject?` | string | A linked Pawsitter account, for home users who link one. |
 
 **`Account`**: the tenant.
 
@@ -127,7 +134,8 @@ erDiagram
 | `kind` | enum | `household` · `pro_sitter` · `clinic` · `boarding` (only `household` in MVP) |
 | `default_site_id?` | Site | |
 | `plan_id`, `billing_anchor` | Plan, instant | The plan version, and when billing periods start (see 2.14). |
-| `settings` | object | Feature flags, retention, and the capability routing table ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)). |
+| `settings` | object | Feature flags, retention, the capability routing table ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)), and for home installs the sign-in policy ([08 §8.6](08-home-and-cloud.md#86-home-sign-in-options)). |
+| `data_home` | string | `cloud` or `installation:<install_id>`: exactly one. Moving is export, import and cutover, never writing to both ([08 §8.15](08-home-and-cloud.md#815-moving-between-editions)). |
 
 **`Membership`**: `(user_id, account_id)` unique.
 
@@ -137,23 +145,43 @@ erDiagram
 | `status` | enum | `invited` · `active` · `suspended` · `left` |
 | `scope?` | object | Optional restriction to some sites/pets for standing caregivers (a regular dog walker). |
 
-**`Invitation`**: email/phone or link token, intended role, optional engagement, `expires_at`, `accepted_at?`.
-
-**`GuestLink`**: a sitter's way into one engagement without an account (Q11).
+**`JoinGrant`**: how a person joins an account by QR code or link ([08 §8.7](08-home-and-cloud.md#87-joining-by-qr)). It replaces the earlier `Invitation` and no-account `GuestLink`.
 
 | Field | Type | Notes |
 |---|---|---|
-| `engagement_id` | Engagement | Access is exactly the engagement's: its pets, sites, permissions and window. |
-| `token_hash` | bytes | The link carries a random token; only its hash is stored. |
-| `recipient_name`, `recipient_phone?`, `recipient_email?` | | Where reminders and one-time codes go. |
-| `verified_until?` | instant | Set when the guest enters a one-time code; required to reveal secrets ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)). |
-| `last_opened_at?`, `revoked_at?` | instant | The owner sees when the link was last opened, and can revoke it at once. |
+| `kind` | enum | `sent` · `window` (shown on a screen) · `printed_locator` · `trip_code` |
+| `engagement_id?`, `role`, `intended_user_id?` | | |
+| `recipient_name`, `recipient_phone?`, `recipient_email?` | | The contact the owner entered. Codes go only here, never to a number typed on a public page. |
+| `token_hash` or `locator_hash` | bytes | Only hashes are stored. A printed locator grants nothing on its own. |
+| `join_check` | enum | `code` · `approval` · `owner_present` |
+| `max_uses`, `uses`, `expires_at` | | Sent invites allow two devices by default and last until the trip's access ends. |
+| `rotated_from_id?`, `revoked_at?`, `reuse_attempts` | | Reuse of a spent secret alerts the owner. |
+
+**`JoinRequest`**: a join waiting for its second factor: `grant_id`, `display_name`, device summary, `match_words`, `status` (`pending` · `approved` · `denied` · `expired`), `decided_by?`, `expires_at`. **`JoinWindow`**: a join window shown on a screen: `opened_by`, `engagement_id?`, `closes_at`, the current and previous nonce hashes, `max_joins`.
+
+**`Device`**: one browser or app instance of a user: `user_id`, `label`, `created_via`, `session_hash`, `idle_expires_at`, `last_seen_at`, `last_transport`, `revoked_at?`.
+
+**`DeviceGrant`**: one device's access to one account ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)).
+
+| Field | Type | Notes |
+|---|---|---|
+| `device_id`, `account_id`, `engagement_id?` | refs | One grant per account, so a join in one household never opens another. |
+| `auth_strength` | enum | How the grant was established: `passkey_uv` · `otp_verified` · `approved` · `pin` |
+| `verified_until?`, `step_up_until?` | instant | Code verification (24 hours) and step-up (5 minutes), scoped to this device and this account. |
+| `absolute_expires_at` | instant | For caregivers, no later than the trip's access end. |
+| `ended_at?`, `upload_until?` | instant | When a trip ends, the grant turns upload-only for 7 days, for queued doses and completions dated inside the access window ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
+| `approved_by?`, `revoked_at?`, `revoked_by?`, `revoke_reason?` | | |
+
+**`PasskeyCredential`**: `user_id`, `rp_id` (the cloud domain or a home install's name), credential id, public key, sign count, `last_used_at`, `revoked_at?`. **`PersonPin`** (home): a slow salted hash bound to one device, with a lockout counter. **`OwnerRecoveryKit`**: hashed one-time recovery codes per owner. **`SecurityEvent`**: sign-ins, joins, approvals, step-ups, reveals, revocations and remote locks. Owners can see them, they're kept at least 1 year, and home installs mirror them off the box ([08 §8.13](08-home-and-cloud.md#813-co-owners-and-account-safety)).
+
+**`Installation`** (home only, one per install): `install_id`, hostname label, certificate fingerprints and expiry, Home Link key id, enabled companion features, schema version, LAN paths, last heartbeat. For a home account, the cloud keeps only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees), and no care records.
 
 **`Engagement`**: a care job that grants time-boxed access.
 
 | Field | Type | Notes |
 |---|---|---|
-| `caregiver_user_id?` | User | Null until an invitation is accepted. |
+| `caregiver_user_id?` | User | Null until the sitter joins. |
+| `approver_user_id?` | User | Someone the owner names (a family member or the backup contact) who can approve joins and reset PINs while the owners are away ([08 §8.12](08-home-and-cloud.md#812-backups-keys-and-recovery-at-home)). |
 | `title` | string | "Halloween weekend" |
 | `care_mode` | enum | `drop_in` · `overnight` · `boarding` (pets go to another site) · `live_in` |
 | `starts_at`, `ends_at` | instant | |
@@ -176,7 +204,7 @@ erDiagram
 | `status` | enum | `planned` · `in_progress` · `completed` · `missed` · `cancelled` |
 | `report_id?` | ref | The visit report sent to the owner. |
 
-**`Actor`** (value object on every write and event): `{kind: user | guest | system | integration, user_id?, guest_link_id?, integration?: "assistant" | "mcp" | "discord" | ..., on_behalf_of_user_id?}`. When an AI assistant acts, the event says *assistant on behalf of Jane*. A sitter on a guest link appears in the shared log under the name the owner gave them.
+**`Actor`** (value object on every write and event): `{kind: user | system | integration, user_id?, device_id?, auth_method?, integration?: "assistant" | "mcp" | "discord" | ..., on_behalf_of_user_id?}`. Every action shows who did it and on which device. When an AI assistant acts, the event says *assistant on behalf of Jane*.
 
 ## 2.5 Sites & places
 
@@ -416,8 +444,9 @@ Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) b
 | `ciphertext`, `key_id` | bytes | Envelope-encrypted via the crypto port; the plaintext never sits in the main database. `key_id` names where the key lives (cloud KMS or the owner's edge node, [03 §3.9.4](03-core-architecture.md#394-trade-off-parts-at-home-can-go-offline)). |
 | `reveal_policy` | enum | `members` · `engaged_caregivers` · `owners_only` |
 | `assistant_access` | enum | `never` (default) · `on_request`: whether AI adapters may ever receive it. |
+| `needed_outside` | bool | Needed to get in, such as a door or lockbox code. For a home install, readiness checks that it's staged on the sitter's phone or that the owner has a fallback ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
 
-**`SecretReveal`**: `{secret_id, revealed_to, actor, at, interface}`. Every reveal is logged, and the owner can see the log.
+**`SecretReveal`**: `{secret_id, revealed_to, actor, device_id, step_up_method, transport, at, interface}`. Every reveal is logged, and the owner can see the log.
 
 **`Contact`**: `name`, `organization?`, `kind` (`vet` · `emergency_vet` · `owner` · `family` · `neighbor` · `groomer` · `walker` · `sitter` · `pharmacy` · `other`), `phones[]`, `email?`, `address?`, `hours?`, `notes?`, `user_id?` (if they're also a user).
 
@@ -546,7 +575,7 @@ The **credit balance** is the sum of unexpired grants' `remaining`. Usage draws 
 
 Reminders that fire reliably are the most valued feature in the category ([06 #1](06-feature-research.md#63-ranked-features)), so every message is tracked from sent to answered.
 
-**`NotificationPreference`**: per user (or guest link) per account.
+**`NotificationPreference`**: per user per account.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -559,14 +588,16 @@ Reminders that fire reliably are the most valued feature in the category ([06 #1
 
 | Field | Type | Notes |
 |---|---|---|
-| `recipient` | User or GuestLink | Guest sitters have no app: medication reminders go by SMS, the rest by email or web push. |
-| `channel` | enum | `push` · `web_push` · `email` · `sms` · `whatsapp` · `discord` · … |
+| `recipient`, `device_id?` | User | Sitters without the app get medication reminders by SMS, and the rest by email or web push. |
+| `channel` | enum | `push` · `web_push` · `native_push` · `email` · `sms` · `whatsapp` · `discord` · … |
 | `message_id?`, `external_message_id?` | | For care-thread copies: the message, and its id on the channel, so a reply there maps back to it. |
 | `kind` | enum | `reminder` · `escalation` · `dose_alert` · `incident` · `update` · `report` · `readiness` · `thread` · `correction` |
 | `task_id?`, `subject_ids[]` | refs | |
 | `sent_at`, `delivered_at?`, `opened_at?`, `answered_at?` | instant | Receipts where the channel provides them. |
 | `superseded_at?` | instant | Set when someone completes the task: the reminder is withdrawn on every device. |
 | `status` | enum | `queued` · `sent` · `delivered` · `failed` · `answered` · `superseded` |
+
+**`PushSubscription`**: a web push subscription per device and origin: endpoint, keys, VAPID key id, failure count. It's deleted when the push service reports it gone. **`NativePushRegistration`**: a native shell's registration. For home installs, only Pawsitter's push relay holds the device token.
 
 Delivery rates per channel feed the `DeliveryMonitor` job ([03 §3.6](03-core-architecture.md#36-background-jobs-jobscheduler-port)). When a channel fails for a recipient, the next one in their list is tried.
 
@@ -594,7 +625,7 @@ Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranke
 
 ## 2.17 Care threads & channels
 
-Every answer the assistant gives a caregiver during an engagement lives in a thread the owner can see and correct ([01 §1.14](01-features.md#114-care-thread--ai-oversight), [03 §3.8.2](03-core-architecture.md#382-owner-corrections)). People reach that thread on different channels: the app, the website, the sitter link, SMS, WhatsApp, Discord. It stays one conversation however many channels carry it ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)).
+Every answer the assistant gives a caregiver during an engagement lives in a thread the owner can see and correct ([01 §1.14](01-features.md#114-care-thread--ai-oversight), [03 §3.8.2](03-core-architecture.md#382-owner-corrections)). People reach that thread on different channels: the app, the website, SMS, WhatsApp, Discord. It stays one conversation however many channels carry it ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)).
 
 **`Thread`**: a conversation, independent of any channel.
 
@@ -602,7 +633,7 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 |---|---|---|
 | `scope` | enum | `engagement` (one per trip, shared with everyone on it) · `household` (family, outside trips; V2) · `direct` (one member and the assistant; private to them) |
 | `engagement_id?` | Engagement | For `engagement` threads. |
-| `participants` | refs | Users and guest links. The assistant posts as itself. |
+| `participants` | refs | Users. The assistant posts as itself. |
 | `notify_policy` | enum | `important` (medication, health and incidents notify the owner at once; the default) · `every_answer` |
 
 **`ChannelIdentity`**: an account on an outside channel, verified as a particular person in this household's account.
@@ -611,7 +642,7 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 |---|---|---|
 | `channel` | enum | `sms` · `whatsapp` · `discord` · `slack` · `telegram` · `email` · … |
 | `external_user_id` | string | A phone number, a WhatsApp id, a Discord user id. Unique per channel within the account. |
-| `user_id?`, `guest_link_id?` | refs | Who it is. |
+| `user_id` | User | Who it is. |
 | `verified_at`, `verified_by` | | Verified with a one-time code sent through that channel, or linked by the owner. |
 | `revoked_at?` | instant | |
 
@@ -631,7 +662,7 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 |---|---|---|
 | `thread_id` | Thread | |
 | `author` | Actor | A user, a guest, the assistant, or `system` for inline events. |
-| `channel` | enum | Where it was written: `app` · `web` · `guest_link` · `sms` · `whatsapp` · `discord` · … |
+| `channel` | enum | Where it was written: `app` · `web` · `sms` · `whatsapp` · `discord` · … |
 | `external_message_id?` | string | The channel's id for an inbound message. Unique per channel, so a repeated delivery is dropped. |
 | `sent_at?`, `received_at` | instant | The channel's timestamp, and when the core received it. Threads are ordered by `received_at`. |
 | `kind` | enum | `question` · `answer` · `reply` · `correction` · `event` (a dose logged, an incident) · `system` |
@@ -660,7 +691,7 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 10. A billable model call or SMS starts only with a held `UsageReservation` that fits within the credit balance and every applicable `UsageLimit`.
 11. Credit balances and usage counters equal what the `UsageRecord` ledger implies, and can be rebuilt from it.
 12. A port request never reaches a provider whose `max_sensitivity` is below the sensitivity of the data it carries.
-13. A guest link works only within its engagement's access window and stops the moment it's revoked. Revealing a secret through it requires a verified one-time code.
+13. A join secret is consumed only by an explicit POST after its second factor, and a printed card's locator grants nothing on its own. Revealing a secret needs a step-up scoped to the device and the account.
 14. Template and AI output becomes a record only when a person accepts the draft. An accepted medication draft keeps its source text as `instructions_verbatim`.
 15. When anyone completes a task, every open reminder for it is superseded.
 16. Text sent to a hosted model for import has likely secrets masked first.
@@ -671,6 +702,10 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 21. A command that changes an existing record applies only if its `expected_version` matches the record's current version; otherwise it fails with a conflict.
 22. Messages from an outside channel are accepted only from a verified, unrevoked `ChannelIdentity`, and act with that person's permissions and the channel's egress tier.
 23. A message exists once, however many channels deliver it, and the same inbound message (`channel`, `external_message_id`) is never stored twice.
+24. A device grant covers exactly one account. A caregiver's grant ends no later than the trip's access end; after that, for 7 days, the device can only upload doses and completions dated inside the access window.
+25. Queued facts (doses, task completions) are never discarded because a grant ended or a request was refused.
+26. Transport never raises trust, and relayed traffic is never treated as local.
+27. An account has exactly one data home. For a home account, the cloud holds only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees).
 
 ## 2.19 Mapping from the prototype
 

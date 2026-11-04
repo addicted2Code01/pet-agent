@@ -24,8 +24,11 @@
 | Apply a correction's draft | ✓ | ✓ | ✓ | only changes they could make themselves (where an item is, their tasks) |
 | See the account's AI usage; set usage caps | ✓ | ✓ | own usage | own usage |
 | Pair edge nodes; change capability routing | ✓ | | | |
+| Approve joins and new devices | ✓ | ✓ | the trip's named approver | |
+| Revoke a device; see linked devices and the security log | ✓ | ✓ | own devices | own devices |
+| Lock remote access or unpair a home install (passkey step-up; every owner alerted) | ✓ | | | |
 
-A sitter on a guest link has the caregiver column's rights for that one engagement, limited to `normal` data (§4.2).
+A sitter joins as a lightweight user ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)). Their device grant gives them the caregiver column's rights for that one engagement, limited to `normal` data (§4.2).
 
 Roles map to **permission sets**. Engagements and standing-caregiver memberships narrow them by **scope** (pets, sites) and **time** (engagement window). The policy check is a single core function, `authorize(caller, action, resource) → allow | deny(reason)`, used by every command and query and unit-tested as a matrix.
 
@@ -36,12 +39,16 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - Secrets revealed during an engagement are not cached on the caregiver's device after it ends. Clients get an expiry with every secret.
 - The owner can end access early with `CancelEngagement`, or by tapping "I'm home" (`EndEngagement`). Both take effect immediately.
 
-**Sitter links** (guest access without an account, Q11):
+**Sitter joins** (Q11, revised; the full rules are in [08 §8.7](08-home-and-cloud.md#87-joining-by-qr) and [§8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)):
 
-- A link grants exactly its engagement's access: the same pets, sites, permissions and window. It holds a random token, and only the token's hash is stored.
-- Revealing a secret needs a one-time code sent to the phone or email the owner entered for the sitter. Verification lasts 24 hours, and every reveal is logged against the link.
-- Links never carry `private` data and can't change medication orders, routines or settings.
-- The owner sees when the link was last opened and can revoke it at once. Attempts to open links are rate-limited.
+- **The join.** A QR code or link the owner sends, shows or prints makes the sitter a lightweight user, with a device grant for exactly that engagement: the same pets, sites, permissions and window.
+  - Join secrets travel only in the URL fragment, are stored only as hashes, and are claimed by a POST after a second factor.
+  - The second factor is a code to the contact the owner entered, or the owner's approval. It's bound to the browser that started the join.
+- **Revealing a secret** needs a step-up scoped to that device and account: a passkey within 5 minutes, or a code verified within 24 hours. At a home install with no internet, a personal PIN or live owner approval works instead. Every reveal is logged with the device.
+- **Sitters never see `private` data,** and can't change medication orders, routines or settings.
+- **The owner sees every join and device,** and can revoke one at once. Attempts are rate-limited, and reuse of a spent link alerts the owner.
+- **When a trip ends,** the device keeps an upload-only grant for 7 days, so doses recorded offline still arrive; they're flagged and the owner is alerted. Ending a trip never discards a recorded dose.
+- **One household at a time.** A join in one household never authorizes the device in another; each account needs its own grant.
 
 ## 4.3 Sensitivity tiers
 
@@ -70,7 +77,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 
 - **Export**: all of an account's data as JSON + media, from the core's own model.
 - **Deletion**: account deletion soft-deletes immediately, revokes all access, and hard-deletes after a short recovery period. Secrets and keys are destroyed first.
-- **Retention**: event log and administrations kept for the account's lifetime (medical history); secret-reveal logs kept for at least 1 year. Record revisions are kept for the account's lifetime too, so any answer can be explained later; secret values are the exception and are destroyed on rotation ([02 §2.1](02-domain-model.md#versions--history)).
+- **Retention**: event log and administrations kept for the account's lifetime (medical history); secret-reveal logs and the security log (joins, approvals, step-ups, revocations) kept for at least 1 year. Record revisions are kept for the account's lifetime too, so any answer can be explained later; secret values are the exception and are destroyed on rotation ([02 §2.1](02-domain-model.md#versions--history)).
 
 ## 4.7 Disclaimers & safety
 
@@ -82,6 +89,11 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 
 - The printable care sheet never includes secret values; it says where to find them in the app. `private` data is printed only if the owner opts in for that print.
 - The sitter's offline copy holds no secrets and expires with access: the app refuses to show it afterwards.
+  - It needs a secure (HTTPS) origin, and holds tasks only 48 hours ahead.
+  - It's encrypted under a key the server leases to the device for 24 to 48 hours, so a revoked device loses access when the lease lapses.
+  - It won't open if the device clock is earlier than the last server time it saw.
+
+  Revoking can't erase what's already on a phone, so the revoke dialog suggests rotating any code that was revealed ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)).
 - Discreet mode keeps medication names and health details off lock screens and out of SMS text.
 - Care-note import masks likely secrets before any hosted model sees the text, and shows the owner what will be sent ([03 §3.8.1](03-core-architecture.md#381-care-note-import)). The pasted note is deleted when the import is done unless the owner keeps it.
 
@@ -97,3 +109,22 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 - **Private conversations only.** A thread can be carried by a direct message or a private thread containing exactly its participants, never a group channel where others could read it.
 - **Copies on other platforms.** Messages sent through SMS, WhatsApp or Discord also live on those platforms. Deleting a thread in Pawsitter can't delete those copies; the owner is told so when enabling a channel.
 - **Consent.** SMS and WhatsApp need the recipient's opt-in, and replying "STOP" always works.
+
+## 4.10 Home installs
+
+The full design is in [08](08-home-and-cloud.md).
+
+- **The home network is not a trust boundary.** Every request needs a signed-in person and device, whichever way it arrives. How a request arrived is recorded but never raises trust, and relayed traffic is never treated as local. No-login options aren't offered in the beta.
+- **Who can see what.**
+  - TLS ends on the home machine. Pawsitter's relay sees only the install's name, IP addresses, timing and volume.
+  - Pawsitter controls the home zone's DNS and could obtain a certificate for any install. Owners can audit issuance in the public Certificate Transparency logs, and setup says so.
+  - The companion services publish exactly what each one stores and can observe ([08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees)). SMS and email content passes through Pawsitter and its providers.
+- **Keys at home.** The key that unwraps door codes is protected by the platform's keystore where one exists. On a NAS or Linux box it's split, with one share released over the Home Link only to the paired install, so a stolen, unpaired box can't decrypt. A wrapped copy goes in the owner's recovery kit.
+- **Whoever administers the host can read its disk.** Setup says so. Security events and a hash of the revision history are mirrored off the box, where every owner can see them, so tampering is detectable. Removing the last other owner takes effect only after a notice period, with an export for the removed owner.
+- **Remote safety.** From their Pawsitter account an owner can revoke a device on the install, or lock remote access entirely. Both need a passkey step-up and alert every owner. A cloud-side unpair is a soft disable that can be undone for 7 days.
+- **Updates.** Code and data updates are signed. Security fixes ship within days and are never held back by the owner for long. Non-security updates wait until no trip is active.
+- **Hygiene.**
+  - Every listener checks the `Host` header against the install's names.
+  - Only the install's own `__Host-` cookies are accepted.
+  - Every write checks `Origin`.
+  - Nothing listens on the network until the install is claimed.

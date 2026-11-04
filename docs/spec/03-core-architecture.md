@@ -36,15 +36,17 @@ Every command and query carries a `CallerContext`:
 ```
 CallerContext {
   account_id
-  actor: Actor            # user / guest / system / integration, + on_behalf_of
-  interface: "web" | "mobile" | "guest_link" | "api" | "assistant" | "mcp" | "sms" | "whatsapp" | "discord" | ...
+  actor: Actor            # user / system / integration, + device and on_behalf_of
+  interface: "web" | "mobile" | "api" | "assistant" | "mcp" | "sms" | "whatsapp" | "discord" | ...
   egress_tier: "normal" | "private"   # the most sensitive data this interface may receive
+  transport: "loopback" | "lan" | "relay" | "cloud"   # how the request arrived; recorded, never raises trust
+  device_id, auth_strength   # the device grant and how it was established (passkey, code, approval, PIN)
   now: Instant            # from the Clock port at the edge, so a request is evaluated at one instant
   locale, request_id
 }
 ```
 
-`interface` and `egress_tier` come from the authenticated credential, never from the request. First-party apps get `private` (what a user may see is still decided by their role). A sitter on a guest link gets `interface = "guest_link"`, the `normal` tier, and exactly their engagement's scope. The owner registers each other integration, for example an MCP server on their laptop with a local model, and sets its tier; the default is `normal`.
+`interface` and `egress_tier` come from the authenticated credential, never from the request. First-party apps get `private` (what a user may see is still decided by their role). A sitter is a lightweight user on the web app: their device grant limits them to their engagement's scope and the `normal` tier. `transport`, `device_id` and `auth_strength` also come from the connection and the credential; relayed traffic is never treated as local ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)). The owner registers each other integration, for example an MCP server on their laptop with a local model, and sets its tier; the default is `normal`.
 
 The policy layer uses `actor`, `interface` and `egress_tier` to decide access and redaction. For example, the `assistant` interface never receives secret plaintext unless the secret allows it, and private photos are replaced by placeholders for interfaces with a `normal` tier.
 
@@ -54,7 +56,10 @@ Each command validates input, checks policy, enforces invariants, writes through
 
 | Area | Commands |
 |---|---|
-| Accounts & access | `CreateAccount`, `InviteMember`, `AcceptInvitation`, `ChangeMemberRole`, `RemoveMember`, `CreateEngagement`, `ConfirmEngagement`, `CancelEngagement`, `EndEngagement` ("I'm home"), `SetVetAuthorization`, `CreateGuestLink`, `RevokeGuestLink`, `VerifyGuest` (one-time code), `PlanVisits`, `CheckIn`, `CheckOut` |
+| Accounts & access | `CreateAccount`, `InviteMember`, `AcceptInvitation`, `ChangeMemberRole`, `RemoveMember`, `CreateEngagement`, `ConfirmEngagement`, `CancelEngagement`, `EndEngagement` ("I'm home"), `SetVetAuthorization`, `PlanVisits`, `CheckIn`, `CheckOut` |
+| Joins ([08 §8.7](08-home-and-cloud.md#87-joining-by-qr)) | `CreateJoinGrant`, `ClaimJoinGrant` (POST, after the second factor), `OpenJoinWindow`, `CloseJoinWindow`, `RequestToJoin`, `ApproveJoin`, `DenyJoin`, `RotatePrintedLocator`, `RevokeJoinGrant` |
+| Devices and sign-in | `RevokeDevice`, `SignOutEverywhere`, `SuspendMember`, `RegisterPasskey`, `RevokePasskey`, `StepUp`, `SetPersonPin`, `LinkPawsitterAccount`, `SetHomeAuthPolicy` |
+| Home installs | `PairInstallation`, `UnpairInstallation` (a soft disable for 7 days), `LockRemoteAccess`, `SetLanAccess`, `RestoreInstallation` (same install id and name) |
 | Sites & places | `CreateSite`, `UpdateSite`, `CreatePlace`, `MovePlace` (re-parent), `RenamePlace`, `ArchivePlace` |
 | Pets | `CreatePet`, `UpdatePet`, `RecordPetLocation`, `RecordWeight` |
 | Items | `CreateItem`, `UpdateItem`, `SetHomePlace`, `MoveItem`, `RecordSighting`, `ReturnItemHome`, `ArchiveItem` |
@@ -95,7 +100,9 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Drafts(import_job_id / template_id)` | Pending drafts with their source excerpts, for the owner to accept, edit or reject. |
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
 | `AiUsage(scope, period)` | Used and remaining for the credit balance and each limit; breakdown by member, purpose and model; reset time; projected run-out date. |
-| `Readiness(engagement_id)` | Whether the trip is ready: sitter link sent and opened; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). |
+| `Readiness(engagement_id)` | Whether the trip is ready: the sitter's device has joined; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). For a home install it also checks ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)):<br>- reachability and uptime;<br>- a certificate valid for more than 14 days;<br>- sleep and power settings;<br>- backup age;<br>- the newest time-zone snapshot;<br>- backup reminders on for medication trips;<br>- every door code needed outside either staged on the sitter's phone or covered by a fallback. |
+| `LinkedDevices(scope)`, `PendingJoins()`, `SecurityLog(range)` | Each person's devices and grants; joins waiting for approval; the security log of joins, approvals, step-ups, reveals and revocations. |
+| `InstallationHealth()` (home) | Heartbeats and uptime, certificate and backup state, versions, the time-zone snapshot, and the Home Link's status. |
 | `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: open owner corrections word for word, first; then the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge, and the recent care thread from every channel. This is the generalized "send everything in the prompt" from the prototype. |
 | `Thread(thread_id, since?)` | The care thread merged across channels: messages with their sources, statuses and channel, open corrections pinned first. |
 | `Inbox(viewer)` | Every thread the viewer may see (each trip's, the household's, their own direct chat), across all channels, with unread counts and open corrections. The owner's view of everything. |
@@ -122,7 +129,10 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `ReminderDispatcher` | Send reminders by each routine's `reminder_policy`; repeat until answered; escalate to the owner, then a backup contact; withdraw a reminder on every device the moment anyone completes the task. |
 | `DeliveryMonitor` | Track delivery receipts per channel; fall back to the recipient's next channel when one fails; alert us when delivery rates drop. Reliability is the product (README principle 10). |
 | `TaskStatusSweeper` | Mark tasks `missed` and raise missed-dose alerts to the owner. Reads are correct without it. |
-| `EngagementLifecycle` | Send the owner the readiness check a day before a trip; open/close caregiver access at window edges and at "I'm home"; activate engagement-only routines; expire guest links. |
+| `EngagementLifecycle` | Send the owner the readiness check a day before a trip; open/close caregiver access at window edges and at "I'm home"; activate engagement-only routines; end caregiver device grants, leaving them upload-only for 7 days ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
+| `SessionSweeper`, `JoinWindowRotator`, `PushSubscriptionSweeper` | Expire sessions and grants; rotate the nonce of open join windows every 30 seconds; delete push subscriptions the push service reports gone. |
+| `ReminderCatchUp` (home) | On every start or wake, fire reminders that came due while the host was down, marked late ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| `CertificateRenewal`, `LinkHeartbeat`, `Backup`, `UpdateCheck` (home) | Renew the install's certificate through ACME Renewal Information and at startup; keep the Home Link alive and report heartbeats; take snapshots daily and before migrations, and the encrypted off-site backup; apply signed code and data updates ([08 §8.11](08-home-and-cloud.md#811-updates-and-data-at-home)). |
 | `ReportBuilder` | Assemble visit, daily and stay reports from events, and push them to the owner. |
 | `ImportDrafting` | Turn a pasted care note into drafts (§3.8.1). |
 | `LowStockCheck` | Raise `stock.low` and fill the shopping list. |
@@ -142,7 +152,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `IdGenerator` | UUIDv7 | |
 | `BlobStore` | Put/get/delete media; signed URLs | S3-compatible, local disk |
 | `Crypto` | Envelope encryption for secrets; key rotation | Cloud KMS, local keyfile |
-| `Identity` | Verify sign-in, map to `User` | OIDC, passkeys, magic links |
+| `Identity` | Passkeys, device sessions and per-account grants, one-time codes, joins and approvals, step-up; OIDC | Pawsitter ID in the cloud; the home core itself at home ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)) |
 | `Notifier` | Deliver a message on a channel and report delivery receipts and the channel's message id | Push (APNs/FCM), web push, email, SMS, WhatsApp, Discord, Slack |
 | `EventPublisher` | Publish committed events | In-process bus, queue, webhooks |
 | `JobScheduler` | Run recurring and one-off jobs | Cron in-process, queue workers |
@@ -234,12 +244,12 @@ Decided (Q2): **cloud first, with the location of each part configurable.** Two 
 
 | Component | Connects through | Cloud | Owner's hardware |
 |---|---|---|---|
-| Core + database + search index + jobs | in process | MVP | Later (self-hosted edition) |
+| Core + database + search index + jobs | in process | MVP | V2: the home edition ([08](08-home-and-cloud.md)) |
 | Language model, vision | `LanguageModel`, `Vision` ports | MVP (hosted, `normal` data only) | V2, via an edge node; may see `private` data |
 | Media files | `BlobStore` port | MVP | V2, via an edge node, e.g. to keep prescription-label photos at home |
 | Secret encryption keys | `Crypto` port | MVP (cloud KMS) | V2, via an edge node: the cloud stores ciphertext it can't decrypt |
-| Notifications | `Notifier` port | MVP | No: push must go through Apple/Google, email and SMS through providers |
-| Sign-in | `Identity` port | MVP | Self-hosted edition only |
+| Notifications | `Notifier` port | MVP | Home edition: web push sent directly from home; native push through Pawsitter's push relay; SMS and email through the cloud messaging bridge ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)) |
+| Sign-in | `Identity` port | MVP | Home edition: the home core is the identity provider ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)) |
 | Web app, mobile/PWA | public API | ✓ | ✓ |
 | AI assistant, MCP server, chat bots | public API | ✓ | ✓, each with its own credential (§3.2) |
 
@@ -255,7 +265,7 @@ A small program the owner runs on their own machine (a home server, Mac mini or 
 
 In the core, a capability placed on an edge node is served by a `RemoteCapability` adapter that forwards the port call over that connection. Nothing else in the core knows where a port is implemented.
 
-The self-hosted edition later uses the same connection in reverse: a cloud relay forwards sitters' API calls to the home core, and the home core sends push notifications through the cloud.
+The home edition generalizes this connection into the **Home Link** ([08 §8.3](08-home-and-cloud.md#83-architecture)). Pawsitter's relay passes encrypted streams down it to the home core, which decrypts them itself, so the cloud never sees content. The same link carries push, messaging, certificate and update traffic, and still offers only fixed operations.
 
 ### 3.9.3 Routing by sensitivity
 
@@ -285,6 +295,7 @@ Every port request is labeled with the highest sensitivity of the data it carrie
 Anything placed at home is unavailable when that machine or the home internet is down. This matters most for secrets: a sitter at the front door can't reveal the lockbox code if its key is on a machine that lost power. So:
 - New secrets default to the cloud KMS. Each secret records its `key_id`, so the owner can move individual keys home: the Wi-Fi password's key might live at home while the lockbox code, which a sitter needs at the door, stays in the cloud.
 - Before an engagement starts, and while it's active, the core runs a **readiness check** on every capability the engagement depends on and warns the owner if one is offline.
+- In the home edition every key is at home. Door codes a sitter needs at the door are staged on the sitter's phone when the access window opens, and backup reminders run from the cloud, so a dark house doesn't lock anyone out ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
 
 ### 3.9.5 Rules the core follows from day one
 
@@ -295,7 +306,7 @@ So that moving a part later is configuration, not a rewrite:
 4. Every port request carries the sensitivity of its data.
 5. References to media and keys are opaque and location-independent (`storage_key` and `key_id` include the provider), so moving a file between stores doesn't change domain records.
 6. An interface's identity and egress tier come from its credential, never from what it claims (§3.2).
-7. Records are sync-ready: client-generated UUIDv7 ids, a `version` on every row with every revision kept, `expected_version` on edits, idempotent commands with a `command_id`, and the event log as the replication stream. This keeps the self-hosted edition and hybrid sync possible.
+7. Records are sync-ready: client-generated UUIDv7 ids, a `version` on every row with every revision kept, `expected_version` on edits, idempotent commands with a `command_id`, and the event log as the replication stream. This keeps the home edition, moving between editions, and hybrid sync possible.
 
 ### 3.9.6 Shapes over time
 
@@ -303,7 +314,7 @@ So that moving a part later is configuration, not a rewrite:
 |---|---|---|---|
 | Cloud | MVP | Cloud (Postgres, S3, KMS) | Hosted model on `normal` data. Interfaces can run anywhere. |
 | Cloud + edge node | V2 | Cloud | The owner's hardware runs a local model and vision, and keeps private media and chosen secret keys. |
-| Self-hosted | Later | Owner's hardware (SQLite or Postgres, local disk) | A cloud relay gives sitters remote access and delivers push notifications. |
+| Home edition | V2 (beta, then GA) | Owner's hardware (SQLite, local disk) | Reached through Pawsitter's relay at its own HTTPS name; companion services for push, messaging, AI, backups and updates ([08](08-home-and-cloud.md)). |
 | Hybrid sync | Later | Replicated between home and cloud through the event log | Only if there's real demand; the most complex shape. |
 
 ## 3.10 AI usage metering
@@ -340,7 +351,7 @@ The plan sets the default limits. An owner can add tighter limits (cap a sitter 
 
 ### 3.10.3 Who pays
 
-Usage is charged to the account in the caller context: a sitter chatting about the Campbells' cat uses the Campbells' allotment, and SMS reminders sent to that sitter are charged to the Campbells too. Calls to the owner's edge node, and later to a provider key the owner brings, are recorded for the usage display but aren't billable.
+Usage is charged to the account in the caller context: a sitter chatting about the Campbells' cat uses the Campbells' allotment, and SMS reminders sent to that sitter are charged to the Campbells too. Home installs reach hosted models through Pawsitter's model proxy, which holds the provider keys and is the metering authority; home cores never hold Pawsitter's keys ([08 §8.3](08-home-and-cloud.md#83-architecture)). Calls to the owner's edge node, and later to a provider key the owner brings, are recorded for the usage display but aren't billable.
 
 ### 3.10.4 Running out never affects care
 
