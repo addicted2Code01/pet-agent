@@ -57,8 +57,8 @@ Each command validates input, checks policy, enforces invariants, writes through
 
 | Area | Commands |
 |---|---|
-| Accounts & access | `CreateAccount`, `InviteMember`, `AcceptInvitation`, `ChangeMemberRole`, `RemoveMember`, `CreateEngagement`, `ConfirmEngagement`, `CancelEngagement`, `EndEngagement` ("I'm home"), `SetVetAuthorization`, `PlanVisits`, `CheckIn`, `CheckOut` |
-| Joins ([08 §8.7](08-home-and-cloud.md#87-joining-by-qr)) | `CreateJoinGrant`, `ClaimJoinGrant` (POST, after the second factor), `OpenJoinWindow`, `CloseJoinWindow`, `RequestToJoin`, `ApproveJoin`, `DenyJoin`, `RotatePrintedLocator`, `RevokeJoinGrant` |
+| Accounts & access | `CreateAccount`, `ChangeMemberRole`, `RemoveMember`, `CreateEngagement`, `ConfirmEngagement`, `CancelEngagement`, `EndEngagement` ("I'm home"), `SetVetAuthorization`, `PlanVisits`, `CheckIn`, `CheckOut` |
+| Joins ([08 §8.7](08-home-and-cloud.md#87-joining-by-qr)) | `CreateJoinGrant` (any role), `ClaimJoinGrant` (POST on Continue; spends the secret only when the second factor passes), `OpenJoinWindow`, `CloseJoinWindow`, `RequestToJoin`, `ApproveJoin`, `DenyJoin`, `RotatePrintedLocator`, `RevokeJoinGrant` |
 | Devices and sign-in | `RevokeDevice`, `SignOutEverywhere`, `SuspendMember`, `RegisterPasskey`, `RevokePasskey`, `StepUp`, `SetPersonPin`, `LinkPawsitterAccount`, `SetHomeAuthPolicy` |
 | Home installs | `PairInstallation`, `UnpairInstallation` (a soft disable for 7 days), `LockRemoteAccess`, `SetLanAccess`, `RestoreInstallation` (same install id and name) |
 | Sites & places | `CreateSite`, `UpdateSite`, `CreatePlace`, `MovePlace` (re-parent), `RenamePlace`, `ArchivePlace` |
@@ -101,7 +101,7 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Drafts(import_job_id / template_id)` | Pending drafts with their source excerpts, for the owner to accept, edit or reject. |
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
 | `AiUsage(scope, period)` | Used and remaining for the credit balance and each limit; breakdown by member, purpose and model; reset time; projected run-out date. |
-| `Readiness(engagement_id)` | Whether the trip is ready: the sitter's device has joined; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). For a home install it also checks ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)):<br>- reachability and uptime;<br>- a certificate valid for more than 14 days;<br>- sleep and power settings;<br>- backup age;<br>- the newest time-zone snapshot;<br>- backup reminders on for medication trips;<br>- every door code needed outside either staged on the sitter's phone or covered by a fallback. |
+| `Readiness(engagement_id)` | Whether the trip is ready: the sitter's device has joined; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; and (V2) every capability the engagement depends on is reachable (§3.9.4). For a home install it also checks ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)):<br>- reachability and uptime;<br>- a certificate valid for more than 14 days;<br>- sleep and power settings;<br>- backup age;<br>- the newest time-zone snapshot;<br>- backup reminders on for medication trips;<br>- every door code needed outside covered by a stated fallback, or able to be staged (the sitter's device has joined and may reveal it) and staged once access opens. |
 | `LinkedDevices(scope)`, `PendingJoins()`, `SecurityLog(range)` | Each person's devices and grants; joins waiting for approval; the security log of joins, approvals, step-ups, reveals and revocations. |
 | `InstallationHealth()` (home) | Heartbeats and uptime, certificate and backup state, versions, the time-zone snapshot, and the Home Link's status. |
 | `Context(scope, budget)` | **A compact, permission-filtered snapshot for assistant adapters**: open owner corrections word for word, first; then the current time in the site's zone, pets, today's tasks with status, active medications with `CanAdminister` results, relevant knowledge, and the recent care thread from every channel. This is the generalized "send everything in the prompt" from the prototype. |
@@ -132,8 +132,8 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `TaskStatusSweeper` | Mark tasks `missed` and raise missed-dose alerts to the owner. Reads are correct without it. |
 | `EngagementLifecycle` | Send the owner the readiness check a day before a trip; open/close caregiver access at window edges and at "I'm home"; activate engagement-only routines; end caregiver device grants, leaving them upload-only for 7 days ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
 | `SessionSweeper`, `JoinWindowRotator`, `PushSubscriptionSweeper` | Expire sessions and grants; rotate the nonce of open join windows every 30 seconds; delete push subscriptions the push service reports gone. |
-| `ReminderCatchUp` (home) | On every start or wake, fire reminders that came due while the host was down, marked late ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
-| `CertificateRenewal`, `LinkHeartbeat`, `Backup`, `UpdateCheck` (home) | Renew the install's certificate through ACME Renewal Information and at startup; keep the Home Link alive and report heartbeats; take snapshots daily and before migrations, and the encrypted off-site backup; apply signed code and data updates ([08 §8.11](08-home-and-cloud.md#811-updates-and-data-at-home)). |
+| `ReminderCatchUp` (home) | On every start or wake, apply the replies queued at the bridge, then take back reminders still open: fire those the bridge never sent, marked late, and continue the rest ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| `CertificateRenewal`, `LinkHeartbeat`, `Backup`, `UpdateCheck` (home) | Renew the install's certificate through ACME Renewal Information and at startup; keep the Home Link alive and report heartbeats; take snapshots daily and before migrations, and the encrypted off-site backup; apply signed code and data updates ([08 §8.4](08-home-and-cloud.md#84-https-for-home-installs), [§8.11](08-home-and-cloud.md#811-updates-and-data-at-home), [§8.12](08-home-and-cloud.md#812-backups-keys-and-recovery-at-home)). |
 | `ReportBuilder` | Assemble visit, daily and stay reports from events, and push them to the owner. |
 | `ImportDrafting` | Turn a pasted care note into drafts (§3.8.1). |
 | `LowStockCheck` | Raise `stock.low` and fill the shopping list. |
@@ -148,7 +148,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 
 | Port | Responsibility | Example adapters |
 |---|---|---|
-| `Repository<T>` / `UnitOfWork` | Load/save aggregates; transactions; tenant scoping built in | Postgres (cloud), SQLite (local/self-hosted, tests) |
+| `Repository<T>` / `UnitOfWork` | Load/save aggregates; transactions; tenant scoping built in | Postgres (cloud), SQLite (home installs, tests) |
 | `Clock` | `now()` | System clock; fixed clock in tests |
 | `IdGenerator` | UUIDv7 | |
 | `BlobStore` | Put/get/delete media; signed URLs | S3-compatible, local disk |
@@ -199,7 +199,7 @@ The assistant has no memory of its own. What it "knows" is the household's recor
 
 **Example.** The sitter asks "What do I do next?" and the assistant answers "Give Sonic his Cerenia". The owner replies in the thread: "No, I gave it at 7 before I left."
 
-1. **Flag.** The reply is posted as a `correction` of that answer (`CorrectAnswer`). The answer is marked *corrected* for everyone, and the sitter is notified at once: push in the app, or SMS for a sitter on a link when it concerns medication.
+1. **Flag.** The reply is posted as a `correction` of that answer (`CorrectAnswer`). The answer is marked *corrected* for everyone, and the sitter is notified at once: push in the app, or SMS for a sitter without the app when it concerns medication.
 2. **Pin.** Until the correction is resolved, the owner's words are pinned at the top of the sitter's view, on the task they concern, and first in every assistant context for that scope (invariant 19). The assistant must show them with any computed answer they concern, and never contradict them.
 3. **Re-answer.** The assistant posts an updated answer that quotes the owner: "Jane says she gave Cerenia at 7:00. Don't give it now."
 4. **Draft the fix.** The assistant proposes the matching change as a `Draft` linked to the correction: here, `record` an administration of Cerenia at 07:00 by Jane. Other corrections become other drafts: revise a medication order, skip a task, move an item, revise a knowledge entry.
@@ -216,7 +216,7 @@ Rules:
 
 ### 3.8.3 One thread, many channels
 
-A trip has one care thread, but people reach it in different ways: the owner in the app or on Discord, the sitter through their link, by text or on WhatsApp. Channel adapters are both driving (inbound messages become `PostMessage` commands) and driven (outbound copies go through the `Notifier` port). Which channels a trip allows is the owner's choice (`SetTripChannels`).
+A trip has one care thread, but people reach it in different ways: the owner in the app or on Discord, the sitter in the web app, by text or on WhatsApp. Channel adapters are both driving (inbound messages become `PostMessage` commands) and driven (outbound copies go through the `Notifier` port). Which channels a trip allows is the owner's choice (`SetTripChannels`).
 
 **Inbound.**
 1. The adapter receives a message (a WhatsApp webhook, a Discord event, an incoming SMS) and looks up the sender's `ChannelIdentity`. An unknown or unverified sender gets a link to verify, and learns nothing about the household.
@@ -238,7 +238,7 @@ The **MCP server** is the same tool set exposed over MCP, so any MCP-capable cli
 
 Decided (Q2): **cloud first, with the location of each part configurable.** Two rules make that possible:
 
-1. **Each account's structured data has exactly one home.** The core, its database, search index and job workers run together: in the cloud for MVP, or on the owner's hardware in a later self-hosted edition. One account's records are never split across locations, so `CanAdminister` and `WhatsNext` give a sitter the same answer wherever they are.
+1. **Each account's structured data has exactly one home.** The core, its database, search index and job workers run together: in the cloud for MVP, or on the owner's hardware in the home edition (V2, [08](08-home-and-cloud.md)). One account's records are never split across locations, so `CanAdminister` and `WhatsNext` give a sitter the same answer wherever they are.
 2. **Anything behind a port can be placed independently.** Compute (language model, vision) and data the core only refers to (media files, encryption keys) can run in the cloud, on the owner's hardware, or nowhere (the null adapter), chosen per account.
 
 ### 3.9.1 What can run where
@@ -266,7 +266,7 @@ A small program the owner runs on their own machine (a home server, Mac mini or 
 
 In the core, a capability placed on an edge node is served by a `RemoteCapability` adapter that forwards the port call over that connection. Nothing else in the core knows where a port is implemented.
 
-The home edition generalizes this connection into the **Home Link** ([08 §8.3](08-home-and-cloud.md#83-architecture)). Pawsitter's relay passes encrypted streams down it to the home core, which decrypts them itself, so the cloud never sees content. The same link carries push, messaging, certificate and update traffic, and still offers only fixed operations.
+The home edition generalizes this connection into the **Home Link** ([08 §8.3](08-home-and-cloud.md#83-architecture)). Pawsitter's relay passes encrypted streams down it to the home core, which decrypts them itself, so the relay never sees their content. The same link carries push, messaging, certificate and update traffic, and still offers only fixed operations; SMS and email content and hosted-model prompts do pass through Pawsitter ([08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees)).
 
 ### 3.9.3 Routing by sensitivity
 
@@ -316,7 +316,7 @@ So that moving a part later is configuration, not a rewrite:
 | Cloud | MVP | Cloud (Postgres, S3, KMS) | Hosted model on `normal` data. Interfaces can run anywhere. |
 | Cloud + edge node | V2 | Cloud | The owner's hardware runs a local model and vision, and keeps private media and chosen secret keys. |
 | Home edition | V2 (beta, then GA) | Owner's hardware (SQLite, local disk) | Reached through Pawsitter's relay at its own HTTPS name; companion services for push, messaging, AI, backups and updates ([08](08-home-and-cloud.md)). |
-| Hybrid sync | Later | Replicated between home and cloud through the event log | Only if there's real demand; the most complex shape. |
+| Hybrid sync | Later | Replicated between home and cloud through the event log | Only if there's real demand; the most complex shape. It would replace the one-data-home rule (02 invariant 27). |
 
 ## 3.10 AI usage metering
 
@@ -324,7 +324,7 @@ Hosted models are paid per token, so every account has an **AI allotment**, and 
 
 ### 3.10.1 One gateway for every model call
 
-Every model call goes through one core service, the `ModelGateway`, whether it comes from a core feature (a visit report) or the AI assistant (a chat reply). The core is the only component that holds provider API keys. Interfaces never call a hosted model directly, so usage can't bypass metering, and a compromised chat bot can't run up a bill. Model generation isn't part of the public API, so the API can't be used as a general-purpose model proxy. The MCP server adds no model cost: MCP clients bring their own model and only call core tools.
+Every model call goes through one core service, the `ModelGateway`, whether it comes from a core feature (a visit report) or the AI assistant (a chat reply). In the cloud, the core is the only component that holds provider API keys; home installs reach hosted models through Pawsitter's model proxy instead (§3.10.3). Interfaces never call a hosted model directly, so usage can't bypass metering, and a compromised chat bot can't run up a bill. Model generation isn't part of the public API, so the API can't be used as a general-purpose model proxy. The MCP server adds no model cost: MCP clients bring their own model and only call core tools.
 
 Each call takes the same steps:
 
@@ -352,7 +352,7 @@ The plan sets the default limits. An owner can add tighter limits (cap a sitter 
 
 ### 3.10.3 Who pays
 
-Usage is charged to the account in the caller context: a sitter chatting about the Campbells' cat uses the Campbells' allotment, and SMS reminders sent to that sitter are charged to the Campbells too. Home installs reach hosted models through Pawsitter's model proxy, which holds the provider keys and is the metering authority; home cores never hold Pawsitter's keys ([08 §8.3](08-home-and-cloud.md#83-architecture)). Calls to the owner's edge node, and later to a provider key the owner brings, are recorded for the usage display but aren't billable.
+Usage is charged to the account in the caller context: a sitter chatting about the Campbells' cat uses the Campbells' allotment, and SMS reminders sent to that sitter are charged to the Campbells too. Home installs reach hosted models through Pawsitter's model proxy, which holds the provider keys and is the metering authority; home cores never hold Pawsitter's keys ([08 §8.3](08-home-and-cloud.md#83-architecture)). The messaging bridge is the metering authority for SMS from home installs in the same way. Calls to the owner's edge node, and later to a provider key the owner brings, are recorded for the usage display but aren't billable.
 
 ### 3.10.4 Running out never affects care
 

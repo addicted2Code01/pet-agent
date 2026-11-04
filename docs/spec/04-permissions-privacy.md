@@ -24,9 +24,11 @@
 | Apply a correction's draft | ✓ | ✓ | ✓ | only changes they could make themselves (where an item is, their tasks) |
 | See the account's AI usage; set usage caps | ✓ | ✓ | own usage | own usage |
 | Pair edge nodes; change capability routing | ✓ | | | |
-| Approve joins and new devices | ✓ | ✓ | the trip's named approver | |
+| Approve joins and new caregiver or family devices (new owner devices: [08 §8.6](08-home-and-cloud.md#86-home-sign-in-options)) | ✓ | ✓ | the trip's named approver, for that trip | |
 | Revoke a device; see linked devices and the security log | ✓ | ✓ | own devices | own devices |
 | Lock remote access or unpair a home install (passkey step-up; every owner alerted) | ✓ | | | |
+
+Creating or revising a medication order needs the same step-up as revealing a secret: a passkey within 5 minutes, or a code verified within 24 hours, scoped to the device and account ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)).
 
 A sitter joins as a lightweight user ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)). Their device grant gives them the caregiver column's rights for that one engagement, limited to `normal` data (§4.2).
 
@@ -35,16 +37,17 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 ## 4.2 Time-boxed access
 
 - A caregiver's access exists only within `[starts_at − access_lead, ends_at + access_lag]`.
-- Outside the window, a caregiver keeps their own past events (what they did) but loses access to the household's data.
+- Outside the window, a caregiver loses access to the household's data. For 7 days their device can still upload queued doses and completions and read their own events and the stay summary, which is also sent to them (below).
 - Secrets revealed during an engagement are not cached on the caregiver's device after it ends. Clients get an expiry with every secret.
 - The owner can end access early with `CancelEngagement`, or by tapping "I'm home" (`EndEngagement`). Both take effect immediately.
 
 **Sitter joins** (Q11, revised; the full rules are in [08 §8.7](08-home-and-cloud.md#87-joining-by-qr) and [§8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)):
 
 - **The join.** A QR code or link the owner sends, shows or prints makes the sitter a lightweight user, with a device grant for exactly that engagement: the same pets, sites, permissions and window.
-  - Join secrets travel only in the URL fragment, are stored only as hashes, and are claimed by a POST after a second factor.
+  - Join secrets travel only in the URL fragment and are stored only as hashes. Tapping Continue sends the secret by POST and starts a join request; the secret is spent only when the second factor passes.
   - The second factor is a code to the contact the owner entered, or the owner's approval. It's bound to the browser that started the join.
-- **Revealing a secret** needs a step-up scoped to that device and account: a passkey within 5 minutes, or a code verified within 24 hours. At a home install with no internet, a personal PIN or live owner approval works instead. Every reveal is logged with the device.
+- **Revealing a secret** needs a step-up scoped to that device and account: a passkey within 5 minutes, or a code verified within 24 hours. At a home install with no internet, a personal PIN or live owner approval works instead where split DNS keeps the install's name reachable; otherwise door codes come from those staged on the sitter's phone (below). Every reveal is logged with the device.
+- **Staged door codes** (home installs). A code flagged `needed_outside` is sealed to the sitter's phone when the access window opens, after an online step-up, and only if the sitter may reveal it. That step-up covers later reveals of the staged copy, which work offline, are logged on the phone and reach the owner when it syncs. The copy expires with access ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
 - **Sitters never see `private` data,** and can't change medication orders, routines or settings.
 - **The owner sees every join and device,** and can revoke one at once. Attempts are rate-limited, and reuse of a spent link alerts the owner.
 - **When a trip ends,** the device keeps an upload-only grant for 7 days, so doses recorded offline still arrive; they're flagged and the owner is alerted. Ending a trip never discards a recorded dose.
@@ -90,10 +93,10 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 - The printable care sheet never includes secret values; it says where to find them in the app. `private` data is printed only if the owner opts in for that print.
 - The sitter's offline copy holds no secrets and expires with access: the app refuses to show it afterwards.
   - It needs a secure (HTTPS) origin, and holds tasks only 48 hours ahead.
-  - It's encrypted under a key the server leases to the device for 24 to 48 hours, so a revoked device loses access when the lease lapses.
+  - It's encrypted under a key the server leases to the device for 24 to 48 hours, so a revoked device loses access when the lease lapses. While a home install is unreachable, the hub hands out renewals the home core deposited ahead ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
   - It won't open if the device clock is earlier than the last server time it saw.
 
-  Revoking can't erase what's already on a phone, so the revoke dialog suggests rotating any code that was revealed ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)).
+  Revoking can't erase what's already on a phone, so the revoke dialog suggests rotating any code that was revealed on it or staged to it ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)).
 - Discreet mode keeps medication names and health details off lock screens and out of SMS text.
 - Care-note import masks likely secrets before any hosted model sees the text, and shows the owner what will be sent ([03 §3.8.1](03-core-architecture.md#381-care-note-import)). The pasted note is deleted when the import is done unless the owner keeps it.
 
@@ -119,7 +122,7 @@ The full design is in [08](08-home-and-cloud.md).
   - TLS ends on the home machine. Pawsitter's relay sees only the install's name, IP addresses, timing and volume.
   - Pawsitter controls the home zone's DNS and could obtain a certificate for any install. Owners can audit issuance in the public Certificate Transparency logs, and setup says so.
   - The companion services publish exactly what each one stores and can observe ([08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees)). SMS and email content passes through Pawsitter and its providers.
-- **Keys at home.** The key that unwraps door codes is protected by the platform's keystore where one exists. On a NAS or Linux box it's split, with one share released over the Home Link only to the paired install, so a stolen, unpaired box can't decrypt. A wrapped copy goes in the owner's recovery kit.
+- **Keys at home.** The key that unwraps door codes is protected by the platform's keystore where one exists. On a NAS or Linux box it's split, with one share released over the Home Link only to the paired install, so a stolen, unpaired box can't decrypt. After a restart with no internet, such a box can't reveal codes until the Home Link is back; codes staged on sitters' phones still work. A wrapped copy goes in the owner's recovery kit.
 - **Whoever administers the host can read its disk.** Setup says so. Security events and a hash of the revision history are mirrored off the box, where every owner can see them, so tampering is detectable. Removing the last other owner takes effect only after a notice period, with an export for the removed owner.
 - **Remote safety.** From their Pawsitter account an owner can revoke a device on the install, or lock remote access entirely. Both need a passkey step-up and alert every owner. A cloud-side unpair is a soft disable that can be undone for 7 days.
 - **Updates.** Code and data updates are signed. Security fixes ship within days and are never held back by the owner for long. Non-security updates wait until no trip is active.

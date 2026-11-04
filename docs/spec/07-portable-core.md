@@ -95,7 +95,7 @@ These rules cover our own kernel code. Third-party code in the kernel comes only
 - **The time-zone pipeline.**
   - Data: a pinned IANA release, compiled with `zic` from the same release. Only the 64-bit TZif data is used, without leap seconds. The kernel uses UTC offsets only, never isdst flags or abbreviations: tzdb's temporary modelling of the 2026 Canadian changes will later change those but not the offsets. The full RFC 9636 footer grammar is supported, results are compared with `zdump` for every zone through 2100, and invariants are checked when a snapshot loads.
   - Signing: snapshots are signed with ECDSA P-256 / SHA-256 (IEEE P1363 encoding). A signed manifest carries `snapshotId`, schema version, sha256, minimum kernel version, issue and expiry dates. Older snapshots are refused, and keys live in a KMS with rotation.
-  - Release: CI prepares each snapshot, but a person approves the diff of affected zones and schedules before it's signed, and it rolls out in stages.
+  - Release: CI prepares each snapshot, but a person approves the diff of affected zones and cloud schedules before it's signed, and it rolls out in stages. Home installs report counts of affected schedules from the first stage, and those counts gate the later stages ([08 §8.11](08-home-and-cloud.md#811-updates-and-data-at-home)).
   - Updates ship as data without an app release. That matters: there were six tzdb releases in 2026 by October, and 2026f gave Cuba five days' notice.
 
 ## 7.6 Numbers

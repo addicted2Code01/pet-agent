@@ -39,7 +39,7 @@ Customers expect these from any app in this space. All are in the MVP:
 - Reminders that reliably fire, with one-tap Taken / Snooze / Skip (06 #1)
 - A shared log of who did what, which clears everyone's reminder (06 #2)
 - Photo updates and reports, pushed as they happen (06 #3)
-- A care guide the sitter opens from a link, with no app or account (06 #4)
+- A care guide the sitter opens from a link or QR code, with no app, password or sign-up form (06 #4)
 - A complete care sheet and emergency card (06 #5)
 - A today checklist (06 #9)
 - Flexible doses: ½ tablets, syringes, every N hours, tapering (06 #11)

@@ -52,7 +52,7 @@ This replaces the earlier no-account sitter link. Every care-guide competitor st
 *Decided:* TypeScript compiled to plain JavaScript, so one kernel build runs on the server, the owner's machine, browsers, the app shells, and later on JavaScriptCore, Hermes and .NET engines. Hosts may supply capabilities through shims but nothing that decides a result; time-zone data, recurrence and decimals are bundled in the kernel. See [07](07-portable-core.md).
 
 **Q14. Offline support in MVP?** ✅
-*Decided:* partly. The sitter's phone keeps a read-only offline copy of the care guide and emergency card, and task completions queue while offline. Full offline editing and sync come in V2. Ids, versions and idempotent commands are designed for it from day one.
+*Decided:* partly. The sitter's phone keeps a read-only offline copy of the care guide and emergency card, and doses and task completions queue while offline and are never discarded ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). Full offline editing and sync come in V2. Ids, versions and idempotent commands are designed for it from day one.
 
 **Q15. Notifications in MVP?** ✅
 *Decided:* yes, and reminders are the top-ranked feature ([06 #1](06-feature-research.md#63-ranked-features)). Push with email as backup for persistent reminders and escalation, refused or missed doses, urgent incidents, photo updates and reports. Sitters without the app get medication reminders by SMS.
@@ -96,7 +96,7 @@ This replaces the earlier no-account sitter link. Every care-guide competitor st
 *Recommendation:* yes, in V2, as a per-trip "review mode" for medication answers. If the owner doesn't respond within a set time, the sitter sees the computed answer and the owner's written instructions, never an unreviewed AI paraphrase.
 
 **Q24. Which channels ship first?** ✅
-*Decided:* MVP ships the app, the website (which sitters use after joining) and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. WhatsApp and Discord come in V2: WhatsApp charges per conversation and requires approved templates outside a 24-hour window, and Discord already had a bot in the prototype. Slack, Telegram and replies by email come later. The model supports any channel from day one, so adding one is an adapter, not a model change.
+*Decided:* MVP ships the app, the website (which sitters use after joining) and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. WhatsApp and Discord come in V2: WhatsApp charges per template message (since July 2025) and requires approved templates outside a 24-hour window, and Discord already had a bot in the prototype. Slack, Telegram and replies by email come later. The model supports any channel from day one, so adding one is an adapter, not a model change.
 
 ## Runtime
 
@@ -122,18 +122,18 @@ From the home and cloud design ([08](08-home-and-cloud.md)).
 - Owners: passkeys with a printed recovery kit.
 - Sitters: a QR join confirmed by a code, or by owner approval when there's no contact on file.
 - Offline step-up: a personal PIN.
-- The beta ships just that preset. The kiosk and Pawsitter-account sign-in come at GA. Leave out trusted home Wi-Fi and the shared PIN unless interviews show owners insist, and even then offer only read-only views.
+- The beta ships just that preset. The kiosk, and Pawsitter-account sign-in for family and sitters, come at GA. Leave out trusted home Wi-Fi and the shared PIN unless interviews show owners insist, and even then offer only read-only views.
 
 **Q29. How does a home medication trip survive the house going dark?** At home, a power or internet outage would stop reminders and door-code reveals.
 
 *Recommendation:* decide before the home beta, with three parts.
-- **Backup reminders from the cloud:** a discreet 48-hour schedule that fires only if the home hasn't marked the dose done. On by default for medication trips; owners can opt out after a warning.
+- **Backup reminders from the cloud:** a discreet 48-hour schedule that the bridge takes over only when the home stops claiming it, repeating and escalating like any medication reminder. On by default for medication trips; owners can opt out after a warning.
 - **Door codes staged on the sitter's phone** for the access window, after a step-up.
-- **A readiness gate** that won't call a medication trip "ready" without both.
+- **A readiness gate:** no home trip is "ready" while a door code the sitter needs can't be staged and has no stated fallback, and a medication trip also needs backup reminders.
 
 **Q30. The home-zone domain.** Every home install's name lives under it, so passkeys and printed cards depend on it never changing.
 
-*Recommendation:* after the product name (Q20), register a separate domain for long-term use and apply for the Public Suffix List. Run the beta on a separate, invite-only zone until the listing ships in browsers.
+*Recommendation:* after the product name (Q20), register a separate domain for long-term use and apply for the Public Suffix List. Run the beta on a separate, invite-only zone until the listing ships in browsers. The PSL has no service-level agreement and may decline the entry, so homes may stay on the invite-only zone beyond the beta.
 
 **Q31. What's free in the home edition?**
 
@@ -148,8 +148,8 @@ From the home and cloud design ([08](08-home-and-cloud.md)).
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q20 (name), Q21 (owner app), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build, and Q27 to Q32 before the home beta.
-3. Start the long-lead items for the home edition now ([08 §8.17](08-home-and-cloud.md#817-phasing)): register the home zone, apply for the Public Suffix List, request Let's Encrypt's rate-limit exemption, and set up a backup CA.
+2. Decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; and Q27 to Q29 and Q31 before the home beta.
+3. Start the long-lead items for the home edition now ([08 §8.17](08-home-and-cloud.md#817-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
 4. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 5. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
 6. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
