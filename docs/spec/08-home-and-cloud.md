@@ -17,7 +17,7 @@ How this was decided, on 2026-11-04:
    - Home sitters are local to the install, and can link a Pawsitter account (§8.5).
    - This replaces the no-account sitter link (Q11).
 5. **Home owners choose their sign-in options from a menu** with a recommended default (§8.6).
-6. **Companion services hold routing data or ciphertext, never care records.** These are the relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog and updates. The one declared exception is a discreet reminder schedule that keeps medication reminders going if the home goes dark (§8.10).
+6. **Companion services hold operational records such as routing data and ciphertext, never care records** (§8.14). These are the relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog and updates. The one declared exception is a discreet reminder schedule that keeps medication reminders going if the home goes dark (§8.10).
 
 **Why not just serve plain HTTP on the home network?**
 - An address like `http://192.168.1.20` isn't a secure context. Browsers then give no passkeys, no service worker (so no offline copy and no web push), no camera, no `crypto.subtle` and no `Secure` cookies. All of this was checked in Chrome 153.
@@ -146,7 +146,7 @@ Sign-in is always on, but nobody types a password. People join once by QR, and t
 | **One-time code** to a contact the owner entered | 6 digits, 10 minutes, 5 tries, sent by SMS or email through the bridge, only to a number or address the owner typed | Codes expire; changing the contact cancels pending ones | No | **The join check for sitters** with a contact on file; the online step-up for door codes |
 | **Owner approval** | The joining device shows match words; an owner approves inside the Pawsitter app, seeing the person, device, time, approximate location and network | Deny, or revoke later | Only with split DNS | **Card joins**, sitters with no contact on file, and new owner devices if the owners require it |
 | **Personal PIN** | 6 to 8 digits, set by a paired person, bound to that device; re-unlocks the app and serves as the offline step-up | An owner or the trip's approver resets it | Only with split DNS | **On** as the offline step-up |
-| **Pawsitter account** (OIDC) | Sign in with an existing Pawsitter account; the owner still approves the first device | Remove the person locally; a cloud-side disable arrives as an event | No | Off; for sitters who use Pawsitter elsewhere |
+| **Pawsitter account** (OIDC) | Sign in with an existing Pawsitter account; the owner still approves the first device | Remove the person locally; a cloud-side disable arrives as an event | No | **Owners**, from the beta, for remote recovery (§8.12). Off for family and sitters; offered at GA to those who use Pawsitter elsewhere |
 | **Console** (`http://localhost`) | On the host only, behind the OS login plus a console token | Rotate the token | Yes | **Always on**, for setup and recovery |
 | **Kiosk device** | A paired tablet shows Today, what's next and the emergency card. It can tick non-medication tasks, and can never record a dose, reveal a code or show private data. | Revoke the kiosk | Only with split DNS | Off |
 | Trusted home Wi-Fi (no sign-in) | Anyone on the home network sees a read-only Today view | Change the Wi-Fi password | Only with split DNS | **Not recommended; not offered in the beta.** The LAN is not a trust boundary, and the kiosk covers the need. |
@@ -160,7 +160,7 @@ Sign-in is always on, but nobody types a password. People join once by QR, and t
   - The join check is a code to the contact the owner entered. With no contact on file, or a printed-card join, the owner approves instead. At a displayed QR, the owner approves on the spot.
   - A passkey is offered, never required.
 
-**The beta ships one preset:** passkeys for owners, paired devices plus a code for sitters, and a PIN for the offline step-up. The kiosk, and Pawsitter-account sign-in for family and sitters, arrive at GA. Owners can sign in to the install with their Pawsitter account from the beta, for remote recovery and, if the per-install test fails, the iOS shell (§8.9). The two no-login options aren't offered.
+**The beta ships one preset:** passkeys for owners, paired devices for family and sitters (joined with a code or owner approval), and a PIN for the offline step-up. The kiosk, and Pawsitter-account sign-in for family and sitters, arrive at GA. Owners can sign in to the install with their Pawsitter account from the beta, for remote recovery and, if the per-install test fails, the iOS shell (§8.9). The two no-login options aren't offered.
 
 ## 8.7 Joining by QR
 
@@ -172,13 +172,13 @@ Sign-in is always on, but nobody types a password. People join once by QR, and t
 - **The SMS wording:** "Pawsitter code to add a device for <household>. Only enter it at <domain>."
 - **In-app browsers.** Gmail and similar apps open links in their own browser, with its own cookies. After joining there, the page offers a one-time link to continue in the phone's real browser. On iPhone it also offers Add to Home Screen, which web push needs, and continues the session inside the installed app.
 - **The owner sees every join:** "Claimed by Jamie's iPhone, Safari, 18:02", with Revoke. Reusing a spent link alerts the owner and names the device.
-- **Approval requests** go to every owner and the trip's approver on all their channels, including SMS as a link that opens the app. Approving still happens only inside the app.
+- **Approval requests** go to every owner and admin and to the trip's approver on all their channels, including SMS as a link that opens the app. Approving still happens only inside the app.
 
 | | Sent invite | Displayed join window | Printed home card |
 |---|---|---|---|
 | **What it is** | A link (and its QR, shown on the owner's own screen) sent by message, SMS or email | A QR plus a short code, shown on the owner's phone, the tray app or a kiosk | A card on the fridge or the care sheet: a QR, the plain domain and a short household code to type |
-| **Secret** | 256 random bits, single use; the owner can resend, which rotates it | 128-bit nonce, rotating every 30 seconds (each lives at most 60 seconds), plus a 6-character code valid 2 minutes | None. The card holds a random locator that grants nothing on its own and can be rotated or disabled. |
-| **Valid** | Until the trip's access ends; a sitter can join early, and their session doesn't idle out before the trip | While the window is open (10 minutes by default; the owner can lengthen it) | Only while a trip's access window is open (from 24 hours before) or the owner has opened a join window |
+| **Secret** | 256 random bits, spent once its device limit is reached; the owner can resend, which rotates it | 128-bit nonce, rotating every 30 seconds (each lives at most 60 seconds), plus a 6-character code valid 2 minutes | None. The card holds a random locator that grants nothing on its own and can be rotated or disabled. |
+| **Valid** | Until the trip's access ends, or 14 days after sending for an invite with no trip; a sitter can join early, and their session doesn't idle out before the trip | While the window is open (10 minutes by default; the owner can lengthen it) | Only while a trip's access window is open (from 24 hours before) or the owner has opened a join window |
 | **Second factor** | A code to the contact the owner entered, or owner approval | The owner approves on the spot; at an unattended kiosk, the trip's join check | Owner approval with match words (the default); or, if the owner allows it, the person's name plus the contact the owner registered, then a code |
 | **Devices** | Two by default (a phone and a tablet), with owner alerts | First join closes the window | One per request |
 | **Limits** | 5 failed claims lock the invite and alert the owner | 5 code attempts per window | 5 requests an hour and 20 a day per card; owner alerted on every request; identical responses, so nobody can probe which contacts exist |
@@ -219,12 +219,12 @@ The trusted side always creates the code, and the owner types it into the box, s
   - deleted passkeys are hidden in Chrome and Safari password managers through the WebAuthn Signal API.
 - **Ended is not revoked.** A trip ending must never lose a dose.
   - The phone's outbox of unsent doses and task completions is never wiped by a refused request; only the read cache is.
-  - An *ended* caregiver device keeps an upload-only grant for 7 days. It can still send administrations and completions whose device time falls inside the access window. They're flagged late-synced, and the owner is alerted at once.
+  - An *ended* caregiver device keeps a limited grant for 7 days. It can still send administrations, completions and reveal logs whose device time falls inside the access window. They're flagged late-synced, and the owner is alerted at once.
   - A *revoked* device gets one quarantined upload, which the owner reviews.
   - Before closing, "I'm home" warns: "Jamie's phone last synced 19:40 and may have unsent entries". The sitter sees "N entries not sent", with an SMS fallback.
   - For those 7 days, an ended device can still read the sitter's own events and the stay summary, which is also sent to the sitter ([04 §4.2](04-permissions-privacy.md#42-time-boxed-access)).
 - **The offline copy after revoking.**
-  - It's encrypted under a key the server leases to the device for 24 to 48 hours and renews while online, so a revoked device loses access when the lease lapses. While a home install is unreachable, the hub hands out renewals the home core deposited ahead (§8.10).
+  - It's encrypted under a key the server leases to the device for 24 to 48 hours and renews while online, so a revoked device loses access when the lease lapses. While a home install is unreachable, the hub hands out renewals the home core deposited ahead, but never to a revoked device (§8.10).
   - It refuses to open if the device clock is earlier than the last server time it saw.
   - It holds tasks only 48 hours ahead, not the whole stay.
   - The revoke dialog says plainly that revoking can't erase what's already on the phone, and suggests rotating every code that was revealed on it or staged to it.
@@ -256,12 +256,12 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
 
 - **Backup reminders from the cloud.**
   - While a trip with medication routines is active, the home core keeps a rolling 48-hour schedule at the bridge: due instant, channel route, escalation routes, repeat policy, discreet text and task id. It never contains medication names.
-  - The home core sends these reminders itself and holds a short claim on each entry, renewing it until someone answers. If a claim lapses first, the bridge takes over that entry and follows the routine's reminder policy: it repeats the reminder until a reply arrives, and escalates to the owner and the backup contact if none does. Replies are queued, sealed to the install.
+  - The home core sends these reminders itself and holds a short claim on each entry. Once someone answers, it closes the entry at the bridge, and it keeps renewing the claim until the bridge confirms the close. If a claim lapses first, the bridge takes over that entry and follows the routine's reminder policy: it repeats the reminder until someone replies "TAKEN" or "SKIP" ("SNOOZE" only delays the next repeat), and escalates to the owner and the backup contact if nobody does. Replies are queued, sealed to the install.
   - On by default for medication trips; owners can opt out after a warning.
   - This is the one declared exception to the rule that companion services hold no care data.
 - **Door codes staged on the sitter's phone.**
   - Each secret has a `needed_outside` flag. Readiness asks the owner to set it for every code a sitter needs to get in.
-  - For flagged secrets this sitter may reveal (the trip grants `secrets.reveal` and the secret's policy allows it), when the access window opens and after an online step-up, the home core seals the code to a non-extractable key on the sitter's device. It expires with access.
+  - For flagged secrets this sitter may reveal (the trip grants `secrets.reveal` and the secret's policy allows it), when the access window opens and after an online step-up, the home core seals the code to a non-extractable key on the sitter's device. It expires with access. A code rotated during the window must be staged again; until it is, readiness flags the stale copy.
   - That step-up covers later reveals of the staged copy, which work offline, are logged on the device and sync later. After the trip, the owner is prompted to rotate the code.
 - **Readiness gate.** At a home install, no trip is "ready" while a code a sitter needs at the door has no stated fallback, such as a key left with a neighbor, and can't be staged: the sitter must be allowed to reveal it and their device must have joined. Once access opens, readiness checks it's staged. A medication trip also isn't ready without backup reminders.
 - **Power and wake.**
@@ -270,7 +270,7 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
   - Setup and readiness check sleep timers, lid and battery, automatic restart after power failure, FileVault, and the Windows power plan and wake timers.
   - The host is scheduled to wake ahead of each reminder.
   - Medication routines on a laptop host need an explicit "stays plugged in and open" confirmation.
-- **Catch-up.** The reminder schedule is stored in SQLite. On every start or wake, the home first applies the replies queued at the bridge, then takes back the reminders still open: those the bridge never sent fire at once, marked late; the rest continue their repeats and escalation.
+- **Catch-up.** The reminder schedule is stored in SQLite. On every start, wake or Home Link reconnect, the home first applies the replies queued at the bridge, then takes back the reminders still open: those the bridge never sent fire at once, marked late; the rest continue their repeats and escalation.
 - **Watchdog.**
   - Heartbeats are watched whenever any reminder is scheduled.
   - A missed heartbeat alerts the owner. During a trip it also alerts the sitter by SMS, and the backup contact if no owner acknowledges it within 30 minutes.
@@ -283,7 +283,7 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
   - the staged door codes.
 
   Phones may leave a Wi-Fi network that has no internet for mobile data, which is one more reason the outage plan doesn't depend on the LAN.
-- **How long this lasts.** Backup reminders and the offline copy's tasks reach 48 hours past the home's last contact, and the watchdog's alerts say so. After that, the sitter has the printed care sheet and the staged door codes. So that the care guide and emergency card stay readable through an outage, the home core deposits each device's lease renewals with the hub, sealed to that device. While the home is unreachable, the hub releases them, except to a device an owner has revoked from their Pawsitter account.
+- **How long this lasts.** Backup reminders and the offline copy's tasks reach 48 hours past the home's last contact, and the watchdog's alerts say so. After that, the sitter has the printed care sheet and the staged door codes. So that the care guide and emergency card stay readable through an outage, the home core deposits each device's lease renewals with the hub, sealed to that device. Revoking a device or ending its trip withdraws its deposits. While the home is unreachable, the hub releases them, except to a device an owner has revoked from their Pawsitter account.
 
 ## 8.11 Updates and data at home
 
@@ -312,7 +312,7 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
 - **Restore onto new hardware.** After Pawsitter-account sign-in, a recovery code and alerts to every owner, the new machine re-binds the **same install id and name** with a new TLS key. Passkeys, Home Screen apps and printed cards keep working. A home core can also reclaim its own name by proving its long-term key.
 - **Readiness shows** the age of the last backup and of the last test restore.
 - **Key custody.** The key that unwraps the secret keys is protected by the platform where it can be: the System keychain on macOS, DPAPI or a TPM-backed key on Windows. On a NAS or Linux, the key is split: one share on disk, the other released by the hub over the Home Link only to the paired install. A stolen box that has been unpaired can't decrypt the door codes. The unwrapped key stays in memory while running, and a wrapped copy goes in the recovery kit. So a NAS or Linux install that restarts without internet can't reveal secrets until the Home Link returns; staged door codes (§8.10) cover that gap.
-- **Owners recovering away from home.** A couple travelling together can lose both phones in one bag. So:
+- **Owners recovering away from home.** A couple traveling together can lose both phones in one bag. So:
   - **Remote recovery:** recovery codes can be kept in a password manager as well as on paper. A Pawsitter-account sign-in plus a recovery code, followed by a 24-hour delay with alerts to the other owners, admits a new device.
   - **A trip approver:** each trip can name one, such as a family member or the backup contact, who can approve the trip's joins, reset PINs and reset locked invites.
   - **Sitters replace their own phone** with a code sent to the contact the owner entered.
@@ -359,7 +359,7 @@ Moving a household between cloud and home comes later (phase 4), but these rules
   - Moves happen only between trips.
   - Secrets are re-wrapped to the destination's key without plaintext leaving the source, after a 24-hour cooling-off that any owner can cancel.
   - The old address stays up for 30 to 90 days as a tombstone: it accepts and forwards queued facts and redirects everything else.
-  - Each person gets a re-enrolment link, and printed cards keep working through the join domain.
+  - Each person gets a re-enrollment link, and printed cards keep working through the join domain.
 
 ## 8.16 Packaging and operations at home
 

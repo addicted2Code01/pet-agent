@@ -154,7 +154,7 @@ erDiagram
 | `recipient_name`, `recipient_phone?`, `recipient_email?` | | The contact the owner entered. Codes go only here, never to a number typed on a public page. |
 | `token_hash` or `locator_hash` | bytes | Only hashes are stored. A printed locator grants nothing on its own. |
 | `join_check` | enum | `code` · `approval` · `owner_present` |
-| `max_uses`, `uses`, `expires_at` | | Sent invites allow two devices by default and last until the trip's access ends. |
+| `max_uses`, `uses`, `expires_at` | | Sent invites allow two devices by default and last until the trip's access ends, or 14 days after sending for an invite with no trip. |
 | `rotated_from_id?`, `revoked_at?`, `reuse_attempts` | | Reuse of a spent secret alerts the owner. |
 
 **`JoinRequest`**: a join waiting for its second factor: `grant_id`, `display_name`, device summary, `match_words`, `status` (`pending` · `approved` · `denied` · `expired`), `decided_by?`, `expires_at`. **`JoinWindow`**: a join window shown on a screen: `opened_by`, `engagement_id?`, `closes_at`, the current and previous nonce hashes, `max_joins`.
@@ -169,7 +169,7 @@ erDiagram
 | `auth_strength` | enum | How the grant was established: `passkey_uv` · `otp_verified` · `approved` · `pin` |
 | `verified_until?`, `step_up_until?` | instant | Code verification (24 hours) and step-up (5 minutes), scoped to this device and this account. |
 | `absolute_expires_at` | instant | For caregivers, no later than the trip's access end. |
-| `ended_at?`, `upload_until?` | instant | When a trip ends, the grant turns upload-only for 7 days, for queued doses and completions dated inside the access window, and can still read the sitter's own events and the stay summary ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
+| `ended_at?`, `upload_until?` | instant | When a trip ends, the grant is limited for 7 days to uploads of queued doses, completions and reveal logs dated inside the access window, and reads of the sitter's own events and the stay summary ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
 | `approved_by?`, `revoked_at?`, `revoked_by?`, `revoke_reason?` | | |
 
 **`PasskeyCredential`**: `user_id`, `rp_id` (the cloud domain or a home install's name), credential id, public key, sign count, `last_used_at`, `revoked_at?`. **`PersonPin`** (home): a slow salted hash bound to one device, with a lockout counter. **`OwnerRecoveryKit`**: hashed one-time recovery codes per owner. **`SecurityEvent`**: sign-ins, joins, approvals, step-ups, reveals, revocations and remote locks. Owners can see them, they're kept at least 1 year, and home installs mirror them off the box ([08 §8.13](08-home-and-cloud.md#813-co-owners-and-account-safety)).
@@ -339,7 +339,7 @@ Safety-critical, so fully structured. The owner's own words are kept alongside t
 | `max_doses_per_window?` | `{count, window}` | E.g. 1 per `PT24H`. |
 | `not_before?` | `{at: instant, local?, zone?, snapshot_id?}` | One-off lockout ("not until Tue 08:00"). `can_administer` checks `at`. When the owner gave a local time, it's kept with the zone and the snapshot that converted it, so a time-zone update re-derives `at` and alerts caregivers ([07 §7.5](07-portable-core.md#75-time)). |
 | `prn_indication?` | text | When to give an as-needed dose ("if he won't take his meds"; "if vomiting"). |
-| `starts_on`, `ends_on?` | local date | In the site's zone, kept as entered. The instants they bound are derived with a recorded `snapshot_id`, and re-derived when a time-zone update moves them. |
+| `starts_on`, `ends_on?` | local date | Kept as entered, with their zone. The instants they bound are derived with a recorded `snapshot_id`, and re-derived when a time-zone update moves them. |
 | `instructions_verbatim` | text | **Exactly as the owner or label wrote it.** Shown next to any computed answer. |
 | `if_missed?` | text | What to do when a dose is late or missed, in the owner's words ("Don't double up. Call the vet if two doses are missed."). Shown with every overdue reminder. |
 | `if_refused?` | text | What to do when the pet refuses or spits out a dose. |
@@ -367,9 +367,9 @@ Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (
 | `note?`, `media_id?` | | |
 | `entered_in_error?` | `{at, by, reason, correction_id?}` | Set instead of deleting a mistaken record. `can_administer` ignores it from then on; the history keeps it. |
 
-Administrations are append-only events. They never go through optimistic version checks, so a dose that really happened can't be lost in a sync conflict. Recording one never fails because its task changed: the administration is stored and linked to its task without the task's version check, and a task can hold several. A second dose for the same task is recorded, and marked `outside_limits` if it broke the limits.
+Administrations are append-only events. They never go through optimistic version checks, so a dose that really happened can't be lost in a sync conflict. Recording one never fails because its task changed: the administration is stored and linked to its task, and a dose that was given marks the task done, all without the task's version check, so its reminders stop. A task can hold several. A second dose given for the same task is recorded and alerts the owner at once, even within the limits, and is marked `outside_limits` if it broke them.
 
-**Derived, never stored by an LLM**: `can_administer(order, at)` returns `{decision, reasons, next_allowed_at, last_given_at, doses_in_window, history_confirmed_at, snapshot_id}` from the order revision, `not_before`, `min_interval`, `max_doses_per_window` and the administrations. `decision` is `allowed` (shown as "yes"), `denied` (shown as "not yet") or `unverified` (shown as "can't confirm"): unverified when the dose history hasn't been confirmed by the server within a freshness bound, or a clock looks wrong. Doses recorded on other devices are widened by a clock-skew margin. Errors and `unverified` fail closed: no dose without the caregiver's explicit confirmation (invariant 6) ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). Windows are rolling durations over instants. Statuses `vomited_after` and `spat_out` still count as given for safety limits unless the order says otherwise.
+**Derived, never stored by an LLM**: `can_administer(order, at)` returns `{decision, reasons, next_allowed_at, last_given_at, doses_in_window, history_confirmed_at, snapshot_id}` from the order revision, `not_before`, `min_interval`, `max_doses_per_window` and the administrations. `decision` is `allowed` (shown as "yes"), `denied` (shown as "not yet") or `unverified` (shown as "can't confirm"): unverified when the dose history hasn't been confirmed by the server within a freshness bound, or a clock looks wrong. If the clock looks right and what's on record already rules the dose out, the answer is `denied`, however old the history. Doses recorded on other devices are widened by a clock-skew margin. Errors and `unverified` fail closed: no dose without the caregiver's explicit confirmation (invariant 6) ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). Windows are rolling durations over instants. Statuses `vomited_after` and `spat_out` still count as given for safety limits unless the order says otherwise.
 
 ## 2.9 Care routines & tasks
 
@@ -398,7 +398,7 @@ Administrations are append-only events. They never go through optimistic version
 - **Interval**: `{type: "interval", every: "PT8H", anchor: "last_completion" | "start", first_due?: instant}`. Next due = last completion + interval. Needed for "every 8 hours" medications.
 - **One-off**: `{type: "once", due_local, snapshot_id}`: a local date and time in the site's zone, expanded like calendar times.
 
-**`Task`**: one occurrence. Unique on `(routine_id, occurrence_key)` so generation is idempotent: for calendar and one-off routines, the local date and time it was generated for, before any gap shift; for interval routines, its `due_at`. A time-zone update that moves `due_at` updates the task instead of creating a second one.
+**`Task`**: one occurrence. Unique on `(routine_id, occurrence_key)` so generation is idempotent: for calendar and one-off routines, the local date and time it was generated for, before any gap shift; for interval routines, its number in the series. A time-zone update that moves `due_at`, or a change to the completion an interval task is anchored on, updates the task instead of creating a second one.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -411,9 +411,9 @@ Administrations are append-only events. They never go through optimistic version
 | `skip_reason?`, `note?` | text | |
 | `evidence_media_ids[]` | refs | |
 | `visit_id?` | Visit | Which visit it was done in. |
-| `administration_ids[]` | Administration | For medication tasks; more than one means the dose was recorded twice. |
+| `administration_ids[]` | Administration | For medication tasks. More than one can mean a retry, such as a dose given after a refusal, or a dose recorded twice. |
 
-Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) by a scheduler job, on routine change, and when a new time-zone snapshot moves their instants. A task that isn't done, skipped or cancelled gets the new `due_at` and window as a new revision, its reminders are rescheduled, and caregivers are told the time moved ([07 §7.5](07-portable-core.md#75-time)). Done and skipped tasks keep their instants. Interval tasks are materialized one at a time: the next is created when the previous one completes. `upcoming` / `due` / `missed` are derived from the clock, and the stored status is only updated by the job for notifications, so reads are always correct even if the job is late.
+Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) by a scheduler job, on routine change, and whenever their instants move: a new time-zone snapshot, a new zone for the site, or, for a routine without a site, the pet moving to a site in another zone. A task that isn't done, skipped or cancelled gets the new `due_at` and window as a new revision, its reminders are rescheduled, and caregivers are told the time moved ([07 §7.5](07-portable-core.md#75-time)). Done and skipped tasks keep their instants. Interval tasks are materialized one at a time: the next is created when the previous one completes. `upcoming` / `due` / `missed` are derived from the clock, and the stored status is only updated by the job for notifications, so reads are always correct even if the job is late.
 
 **Derived queries**: `today(site or pet, at)`, `whats_next(scope, at)`, `overdue(scope, at)`, `last_done(routine)`. Each returns structured rows; an AI may phrase them.
 
@@ -705,10 +705,10 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 18. A correction changes records only through drafts applied by someone allowed to make that change, using the same commands and safety checks as any other edit.
 19. An open correction is included in every assistant context for its scope, ahead of everything else, and shown word for word with any computed answer it concerns.
 20. History is never rewritten. Every write to a versioned entity is a new revision, and a mistaken fact is marked `entered_in_error` and kept.
-21. A command that changes an existing record applies only if its `expected_version` matches the record's current version; otherwise it fails with a conflict.
+21. A command that changes an existing record applies only if its `expected_version` matches the record's current version; otherwise it fails with a conflict. A recorded dose is the exception: it links to its task, and marks it done if the dose was given, without that check (2.8).
 22. Messages from an outside channel are accepted only from a verified, unrevoked `ChannelIdentity`, and act with that person's permissions and the channel's egress tier.
 23. A message exists once, however many channels deliver it, and the same inbound message (`channel`, `external_message_id`) is never stored twice.
-24. A device grant covers exactly one account. A caregiver's grant ends no later than the trip's access end; after that, for 7 days, the device can upload only doses and completions dated inside the access window, and read only the sitter's own events and the stay summary.
+24. A device grant covers exactly one account. A caregiver's grant ends no later than the trip's access end; after that, for 7 days, the device can upload only doses, completions and reveal logs dated inside the access window, and read only the sitter's own events and the stay summary.
 25. Queued facts (doses, task completions) are never discarded because a grant ended or a request was refused.
 26. Transport never raises trust, and relayed traffic is never treated as local.
 27. An account has exactly one data home. For a home account, the cloud holds only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees).

@@ -55,7 +55,7 @@ These come straight from lessons learned building the hackathon prototype.
 | **Home install** | The home edition running on the owner's always-on Mac, Windows PC or NAS, holding that household's data. |
 | **Home Link** | A home install's one outbound, mutually authenticated connection to Pawsitter's companion services. |
 | **Relay** | Pawsitter's service that passes encrypted traffic to a home install's own HTTPS name without decrypting it, so the install works from any network without port forwarding. |
-| **Companion services** | The cloud services a home install uses (relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates). They hold routing data or ciphertext, not care records, except a discreet backup reminder schedule ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| **Companion services** | The cloud services a home install uses (relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates). They hold operational records such as routing data and ciphertext, not care records, except a discreet backup reminder schedule ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
 | **Handback** | The owner tapping "I'm home": the engagement ends, access closes, and the stay summary goes out. |
 | **Site** | A real-world location with an address and time zone: a home, clinic, boarding facility, vacation home or vehicle. |
 | **Place** | A spot inside a site, nested to any depth: room → furniture → shelf → container. |

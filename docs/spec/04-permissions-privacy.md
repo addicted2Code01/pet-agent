@@ -37,7 +37,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 ## 4.2 Time-boxed access
 
 - A caregiver's access exists only within `[starts_at − access_lead, ends_at + access_lag]`.
-- Outside the window, a caregiver loses access to the household's data. For 7 days their device can still upload queued doses and completions and read their own events and the stay summary, which is also sent to them (below).
+- Outside the window, a caregiver loses access to the household's data. For 7 days their device can still upload queued doses, completions and reveal logs, and read their own events and the stay summary, which is also sent to them.
 - Secrets revealed during an engagement are not cached on the caregiver's device after it ends. Clients get an expiry with every secret.
 - The owner can end access early with `CancelEngagement`, or by tapping "I'm home" (`EndEngagement`). Both take effect immediately.
 
@@ -50,7 +50,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - **Staged door codes** (home installs). A code flagged `needed_outside` is sealed to the sitter's phone when the access window opens, after an online step-up, and only if the sitter may reveal it. That step-up covers later reveals of the staged copy, which work offline, are logged on the phone and reach the owner when it syncs. The copy expires with access ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
 - **Sitters never see `private` data,** and can't change medication orders, routines or settings.
 - **The owner sees every join and device,** and can revoke one at once. Attempts are rate-limited, and reuse of a spent link alerts the owner.
-- **When a trip ends,** the device keeps an upload-only grant for 7 days, so doses recorded offline still arrive; they're flagged and the owner is alerted. Ending a trip never discards a recorded dose.
+- **When a trip ends,** the device keeps a limited grant for 7 days, so doses recorded offline still arrive; they're flagged and the owner is alerted. Ending a trip never discards a recorded dose.
 - **One household at a time.** A join in one household never authorizes the device in another; each account needs its own grant.
 
 ## 4.3 Sensitivity tiers
@@ -68,7 +68,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - `Context()` builds the assistant's snapshot *after* redaction for the calling interface, so redaction can't be bypassed by asking cleverly.
 - AI usage records hold token counts and costs, never prompt or reply text. Assistant answers to caregivers are kept only in the care thread (§4.9).
 - An edge node offers only the fixed capabilities the owner turns on. Pairing it doesn't let the cloud run commands on the owner's machine.
-- Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Medication writes through AI require the same safety checks and a tap-to-confirm (on SMS, a confirming reply) from the person the assistant acts for.
+- Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Those that record or change a dose, a medication or a schedule require the same safety checks and a tap-to-confirm (on SMS, a confirming reply) from the person the assistant acts for.
 
 ## 4.5 Media privacy
 
@@ -93,7 +93,7 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 - The printable care sheet never includes secret values; it says where to find them in the app. `private` data is printed only if the owner opts in for that print.
 - The sitter's offline copy holds no secrets and expires with access: the app refuses to show it afterwards.
   - It needs a secure (HTTPS) origin, and holds tasks only 48 hours ahead.
-  - It's encrypted under a key the server leases to the device for 24 to 48 hours, so a revoked device loses access when the lease lapses. While a home install is unreachable, the hub hands out renewals the home core deposited ahead ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
+  - It's encrypted under a key the server leases to the device for 24 to 48 hours, so a revoked device loses access when the lease lapses. While a home install is unreachable, the hub hands out renewals the home core deposited ahead, but never to a revoked device ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
   - It won't open if the device clock is earlier than the last server time it saw.
 
   Revoking can't erase what's already on a phone, so the revoke dialog suggests rotating any code that was revealed on it or staged to it ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)).
