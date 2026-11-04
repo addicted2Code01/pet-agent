@@ -46,7 +46,8 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 ## Technical
 
-**Q13. Core language.** Python (continuity with the prototype, AI ecosystem) or TypeScript (one language with web/mobile)?
+**Q13. Core language.** ✅
+*Decided:* TypeScript compiled to plain JavaScript, so one kernel build runs on the server, the owner's machine, browsers, the app shells, and later on JavaScriptCore, Hermes and .NET engines. Hosts may supply capabilities through shims but nothing that decides a result; time-zone data, recurrence and decimals are bundled in the kernel. See [07](07-portable-core.md).
 
 **Q14. Offline support in MVP?** ✅
 *Decided:* partly. The sitter's phone keeps a read-only offline copy of the care guide and emergency card, and task completions queue while offline. Full offline editing and sync come in V2. Ids, versions and idempotent commands are designed for it from day one.
@@ -80,7 +81,7 @@ Decisions needed before building, roughly in order of how much they shape the co
 
 **Q21. How do owners get reliable push: a native app or a PWA?** Reminders are the most important feature, and on iPhone, web push works only after the user adds the site to their home screen.
 
-*Recommendation:* a thin native shell around the web app for owners and family (one codebase, reliable push), and the no-install web link with SMS reminders for sitters. This leans toward TypeScript for Q13.
+*Recommendation:* a thin native shell around the web app for owners and family (one codebase, reliable push), and the no-install web link with SMS reminders for sitters. With the core in TypeScript (Q13), the shell runs the same kernel as the web app.
 
 ## Care threads
 
@@ -95,11 +96,21 @@ Decisions needed before building, roughly in order of how much they shape the co
 **Q24. Which channels ship first?** ✅
 *Decided:* MVP ships the app, the website, the sitter link and two-way SMS. Sitters need SMS reminders anyway, so letting them reply by text proves the multi-channel model cheaply. WhatsApp and Discord come in V2: WhatsApp charges per conversation and requires approved templates outside a 24-hour window, and Discord already had a bot in the prototype. Slack, Telegram and replies by email come later. The model supports any channel from day one, so adding one is an adapter, not a model change.
 
+## Runtime
+
+**Q25. Minimum OS and browser versions.** The kernel needs only ES2017, but the apps need more: web push on iPhone needs iOS 16.4+, and current Android WebView builds need Android 10+. Every supported version also has to be in the device test matrix ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)).
+
+*Recommendation:* iOS and iPadOS 16.4+, Android 10+, and the current and previous major versions of Chrome, Edge, Firefox and Safari, plus the current Firefox ESR.
+
+**Q26. What happens to a dose time that doesn't exist on the night clocks go forward?** At 02:30 on a spring-forward night there is no 02:30. RFC 5545 skips the occurrence; other libraries shift it forward. A skipped dose is a safety problem ([07 §7.5](07-portable-core.md#75-time)).
+
+*Recommendation:* shift it to the first valid time after the gap and flag it to the caregiver. In the autumn overlap, use the first occurrence. Store the policy on each schedule, so it can be changed per medication.
+
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q13 (core language), Q20 (name) and Q21 (owner app), which shape the first build.
+2. Decide Q20 (name), Q21 (owner app), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build.
 3. Write command/query schemas (inputs, outputs, errors) for the MVP set.
-4. Write a test-first spec for the safety-critical algorithms: `can_administer` (including dated revisions), recurrence/DST, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
+4. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
 5. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.
 6. Plan migration of prototype data (§2.19 in the domain model).

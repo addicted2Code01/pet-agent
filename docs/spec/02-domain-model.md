@@ -16,7 +16,7 @@ Every entity has:
 | `deleted_at?` | instant | Soft delete, itself a revision; hard-deleted only by account deletion. |
 
 Other conventions:
-- **Instants** are UTC. **Local times** (for example `08:00` in a routine) are interpreted in a site's IANA `time_zone`.
+- **Instants** are UTC. **Local times** (for example `08:00` in a routine) are interpreted in a site's IANA `time_zone`. Only the kernel converts between the two, in either direction, using a pinned time-zone snapshot; apps and services never use the host's own time-zone data for schedules ([07 §7.5](07-portable-core.md#75-time)).
 - **Quantities** are `{amount: decimal, unit: string}` with units from a fixed list (`count`, `tablet`, `capsule`, `ml`, `g`, `kg`, `cup`, `can`, `click`, `roll`, `bag`…).
 - **Durations** are ISO 8601 (`PT8H`).
 - **Names** have `aliases: string[]` wherever people search by name ("ear medicine" for Methimazole, "the hedgehog" for a toy).
@@ -27,7 +27,7 @@ Records change all the time: owners edit instructions, sitters log doses, correc
 
 - **Every write makes a revision.** Every versioned entity keeps an immutable **`Revision`** per write: `{entity_id, version, snapshot, effective_from?, recorded_at, recorded_by (Actor), interface, command_id, reason?, cause?}`. Versioned entities are everything in the subject registry (2.2) plus knowledge entries, engagements, tasks, secrets and messages. `cause` links what prompted the change: a draft, a correction, an import. The current row is a projection of the latest revision in effect. `MedicationOrderRevision` (2.8) and `KnowledgeRevision` (2.10) follow this pattern with typed snapshots.
 - **Two time axes.** *Effective time* is when something is true in the world: a revision's `effective_from`, a dose's `administered_at`, a sighting's `observed_at`. *Recorded time* is when the system learned it: `recorded_at`, set by the core from the clock port and never edited. A dose given at 07:00 and reported at 08:12 carries both.
-- **As-of reads.** Any query can be evaluated as of a recorded time ("what did the system know at 08:05?") and at an effective time ("what was the schedule on Monday?"). Because the core is deterministic and takes `now` from the clock port, an assistant answer can be replayed exactly (2.17).
+- **As-of reads.** Any query can be evaluated as of a recorded time ("what did the system know at 08:05?") and at an effective time ("what was the schedule on Monday?"). Because the core is deterministic and takes `now` from the clock port, an assistant answer can be replayed exactly (2.17), given the same kernel build and time-zone snapshot, which every answer records ([07 §7.8](07-portable-core.md#78-versions-replay-and-integrity)).
 - **Facts are corrected, not edited.** Doses, sightings, task completions and stock transactions are append-only. A mistaken one is marked `entered_in_error` (who, when, why, and the correction that prompted it); computations ignore it from then on, and the right fact is recorded as a new record. Nothing disappears, so the log shows both what happened and what was believed at the time.
 - **Edits start from a known version.** Every command that changes an existing record carries `expected_version`. If the record has changed in the meantime, the command fails with a conflict instead of overwriting. Drafts carry a `base_version` and go `stale` the same way (2.16).
 - **Restoring is a new revision.** Going back to an older version writes a new revision with the old values, so history only grows.
@@ -189,7 +189,7 @@ erDiagram
 | `ownership` | enum | `owned` (the account manages its places and items) · `external` (a reference: name, address, contacts only) |
 | `address?` | structured | |
 | `geo?` | lat/lng + radius | For check-in geofences. Sensitive. |
-| `time_zone` | IANA string | **Required.** All routines at this site use it. |
+| `time_zone` | IANA string | **Required.** All routines at this site use it. Kept exactly as entered and resolved through the time-zone snapshot's link table every time it's used ([07 §7.5](07-portable-core.md#75-time)). |
 | `aliases[]` | string[] | |
 | `root_place_id` | Place | Every owned site has a root place; places hang off it. |
 
@@ -332,10 +332,15 @@ Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (
 | `dose_given?` | Quantity | Defaults to the ordered dose. |
 | `administered_at` | instant | When it actually happened (may be back-dated, with `recorded_at` kept separately). |
 | `recorded_at`, `recorded_by` | | |
+| `device_id`, `device_time`, `received_at` | | Where it was recorded, the device's clock, and when the server received it ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). |
+| `kernel_sha256`, `snapshot_id` | | The kernel build and time-zone snapshot that checked it. |
+| `outside_limits?` | `{reasons[]}` | Set when a dose that already happened broke the limits. It's recorded anyway, and the owner and caregivers are alerted at once (invariant 6). |
 | `note?`, `media_id?` | | |
 | `entered_in_error?` | `{at, by, reason, correction_id?}` | Set instead of deleting a mistaken record. `can_administer` ignores it from then on; the history keeps it. |
 
-**Derived, never stored by an LLM**: `can_administer(order, at)` returns `{allowed, reason, next_allowed_at, last_given_at, doses_in_window}` from the order revision, `not_before`, `min_interval`, `max_doses_per_window` and the administrations. Statuses `vomited_after` and `spat_out` still count as given for safety limits unless the order says otherwise.
+Administrations are append-only events. They never go through optimistic version checks, so a dose that really happened can't be lost in a sync conflict.
+
+**Derived, never stored by an LLM**: `can_administer(order, at)` returns `{decision, reasons, next_allowed_at, last_given_at, doses_in_window, history_confirmed_at, snapshot_id}` from the order revision, `not_before`, `min_interval`, `max_doses_per_window` and the administrations. `decision` is `allowed`, `denied` (shown as "not yet") or `unverified`: unverified when the dose history hasn't been confirmed by the server within a freshness bound, or a clock looks wrong. Doses recorded on other devices are widened by a clock-skew margin. Errors and `unverified` fail closed: no dose without explicit confirmation ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). Windows are rolling durations over instants. Statuses `vomited_after` and `spat_out` still count as given for safety limits unless the order says otherwise.
 
 ## 2.9 Care routines & tasks
 
@@ -360,7 +365,7 @@ Changes to dose, interval or limits create a new **`MedicationOrderRevision`** (
 | `status` | enum | `active` · `paused` · `archived` |
 
 `recurrence` is one of:
-- **Calendar**: `{type: "calendar", rrule: "FREQ=DAILY", times: ["08:00","20:00"]}`, interpreted in the site's time zone. Daylight-saving transitions follow RFC 5545 rules.
+- **Calendar**: `{type: "calendar", rrule: "FREQ=DAILY", times: ["08:00","20:00"], gap_policy: "shift_forward", snapshot_id}`, stored as local wall time in the site's time zone. DTSTART, EXDATE, UNTIL and single-occurrence overrides are local values too. Instants come only from expansion, which is redone when the time-zone snapshot changes. `gap_policy` says what happens to a time that doesn't exist on the night clocks go forward (Q26). The full recurrence rules are in [07 §7.5](07-portable-core.md#75-time).
 - **Interval**: `{type: "interval", every: "PT8H", anchor: "last_completion" | "start", first_due?: instant}`. Next due = last completion + interval. Needed for "every 8 hours" medications.
 - **One-off**: `{type: "once", due_at: instant}`.
 
@@ -633,7 +638,7 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 | `body` | text | As written. People's edits are new revisions, shown as "edited"; assistant answers are never edited. Text that looks like a code or password is offered as a secret instead ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
 | `reply_to_id?` | Message | From the channel's native reply when it has one (a WhatsApp quote, a Discord reply); otherwise inferred ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)). |
 | `sources[]` | `{subject_id, version}` | For assistant answers: the record revisions it used, shown as "Based on: Cerenia schedule, updated Oct 30". |
-| `as_of` | instant | For assistant answers: the instant it was computed at. Replaying uses it as both `now` and the recorded-time cutoff, so `ExplainAnswer` shows exactly what the assistant saw (2.1). |
+| `as_of`, `kernel_sha256`, `snapshot_id` | | For assistant answers: the instant it was computed at, the kernel build, and the time-zone snapshot. Replaying uses `as_of` as both `now` and the recorded-time cutoff with the same kernel and snapshot, so `ExplainAnswer` shows exactly what the assistant saw (2.1, [07 §7.8](07-portable-core.md#78-versions-replay-and-integrity)). |
 | `topics` | set | `medication` · `health` · `incident` · `location` · `routine` · `other`. Drives notifications. |
 | `status` | enum | `active` · `corrected` (someone corrected it) · `superseded` (an updated answer replaced it) |
 | `corrected_by_id?` | Message | The correction that flagged it. |
@@ -648,7 +653,7 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 3. Items with `tracking = consumable` have stock and no placement; `unique` items have placement and no stock.
 4. For counted supplies, `StockLevel.quantity = Σ StockTransaction.delta` for that item and place, and is never negative without an explicit `count_adjustment`.
 5. `CareRoutine.kind = medication` ⇔ `medication_order_id` is set; the order's pet is in `pet_ids`.
-6. An `Administration` that breaks `can_administer` is **refused** unless recorded with an explicit override reason by an owner (e.g. a vet's instruction), which raises an event.
+6. A dose that breaks `can_administer` can't be started from the app unless an owner overrides with a reason (e.g. a vet's instruction), which raises an event. A dose that already happened is always recorded as it happened. If it broke the limits, it's marked `outside_limits` and the owner and caregivers are alerted at once. Refusing to record a real dose would make every later answer wrong.
 7. Every entity's `account_id` equals the `account_id` of everything it references.
 8. Any linked `MediaAsset` has `metadata_stripped = true`.
 9. A caregiver's access is valid only within `[engagement.starts_at − access_lead, engagement.ends_at + access_lag]`, ends at `returned_at` if the owner is home early, and covers only the engagement's pets and sites.

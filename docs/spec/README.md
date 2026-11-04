@@ -1,6 +1,6 @@
 # Pawsitter product spec
 
-Status: **draft 0.5**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); owner oversight of every AI answer given to a sitter, through a care thread that combines every channel; and full version history on every record. Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
+Status: **draft 0.6**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); owner oversight of every AI answer given to a sitter, through a care thread that combines every channel; full version history on every record; and a portable TypeScript core that gives the same answers on every host ([07](07-portable-core.md)). Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
 
 ## What we're building
 
@@ -21,6 +21,7 @@ At its heart is a **core** that knows nothing about AI, chat, MCP, Discord or an
 | 4 | [Permissions & privacy](04-permissions-privacy.md) | Roles, time-boxed access, secrets, sensitive data |
 | 5 | [Open questions](05-open-questions.md) | Decisions needed before building |
 | 6 | [Feature research](06-feature-research.md) | What customers value in existing apps; features ranked for us |
+| 7 | [Portable core runtime](07-portable-core.md) | One TypeScript kernel for every host: shims, time zones, authority, integrity, supported engines, conformance |
 
 ## Design principles
 
@@ -38,6 +39,7 @@ These come straight from lessons learned building the hackathon prototype.
 10. **Reliability is the product.** A reminder that doesn't fire or a log entry that disappears breaks trust faster than any missing feature; both show up in the category's worst reviews. Delivery is tracked from sent to answered, failures fall back to another channel, and drops in delivery alert us.
 11. **AI drafts, people confirm.** Anything a model produces from the owner's notes enters the system as a draft. It becomes a record only when a person accepts it, and medication drafts keep the owner's exact words. Corrections work the same way: the owner's words are pinned for the sitter at once, and the matching change to the records is applied with one tap.
 12. **History is never rewritten.** Every change is a new revision recording who, when, why and through which channel. Each revision records both when something was true and when the system learned it. Wrong facts are marked as errors, not erased, and edits that started from an old version are rejected instead of overwriting. So any answer can be replayed exactly as it was given.
+13. **Capabilities may be shimmed; semantics may not.** The safety logic is one TypeScript kernel that runs unchanged on every host. Hosts may supply the clock, randomness, timers and storage, but never anything that decides a result: time-zone data, recurrence and decimal math ship inside the kernel, because hosts' own time-zone data disagree. The server's answers are authoritative, and answers computed on a device fail closed when they can't be sure.
 
 ## Glossary
 
@@ -73,3 +75,6 @@ These come straight from lessons learned building the hackathon prototype.
 | **Revision** | One immutable version of a record: its values, when they took effect, when the system recorded them, who made the change and why. |
 | **Channel** | A way people reach a thread: the app, the website, the sitter link, SMS, WhatsApp, Discord. A message is stored once and delivered on each person's channels. |
 | **Channel identity** | A person's account on an outside channel (a phone number, a Discord user), verified with a one-time code before its messages are accepted. |
+| **Kernel** | The pure, deterministic part of the core: one TypeScript artifact, called with JSON in and JSON out, that gives the same answer on every host. |
+| **Time-zone snapshot** | One pinned, signed copy of the IANA time-zone database the kernel uses, named by a `snapshotId`. Updated as data, without an app release. |
+| **Decision record** | What was asked, which kernel and snapshot answered, and the exact answer, kept so any safety answer can be replayed later. |

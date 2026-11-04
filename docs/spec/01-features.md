@@ -74,7 +74,8 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | Structured medication orders: drug, strength, dose, route, frequency, scheduled vs. as-needed (PRN), start/end, prescriber | MVP | Plus the owner's verbatim instructions. Fractional doses (½ tablet), ml by syringe and clicks. 06 #11. |
 | Safety limits: minimum interval between doses, maximum doses per day, "not before" date/time | MVP | "Cerenia: not before Tue Nov 3, 08:00." |
-| ★ **Can I give it now?**: a computed answer with the reason and the next allowed time | MVP | Never left to an LLM. Our lead feature. 06 #7. |
+| ★ **Can I give it now?**: a computed answer with the reason and the next allowed time | MVP | Never left to an LLM. Our lead feature. Answers "yes", "not yet", or "can't confirm" when another device's doses might be missing, and fails closed ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). 06 #7. |
+| A dose that already happened is always recorded; if it broke the limits, the owner and caregivers are alerted at once | MVP | Never refused, so the history stays true and later answers stay right. |
 | **Medication reminders** that persist until answered, with Taken / Snooze / Skip from the notification | MVP | See 1.6. 06 #1. |
 | Administration log: given, partial, refused, spat out, vomited, skipped, with dose, by whom, when | MVP | Shared with every caregiver. 06 #2. |
 | **If missed / if refused** instructions per medication, shown when a dose is late or refused | MVP | E.g. "Don't double up. Call the vet if two doses are missed." 06 #8. |
@@ -150,6 +151,8 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 |---|---|---|
 | **Notification delivery monitoring**: track every reminder from sent to answered; fall back to another channel and alert us when delivery degrades | MVP | Reliability is the product (principle 10 in the [README](README.md)). 06 #1. |
 | **Record history**: every change to any record is kept with who, when, why and through which channel; any version can be restored; wrong facts are marked as errors, never erased | MVP | Edits check the version they started from, so nothing is silently overwritten ([02 §2.1](02-domain-model.md#versions--history)). |
+| **Portable core**: one TypeScript build of the safety logic runs on the server, in browsers and the app shells, and later in iOS, Android and .NET native components, giving the same answers everywhere | MVP | Checked on every engine by one conformance suite ([07](07-portable-core.md)). |
+| Time-zone updates shipped as signed data, without an app release | MVP | Six tzdb releases in 2026 so far; one gave five days' notice ([07 §7.5](07-portable-core.md#75-time)). |
 | Audit log of sensitive reads (secrets, label photos) | MVP | |
 | Data export and account deletion | MVP | Privacy law and trust. |
 | Backups and point-in-time restore | MVP | |

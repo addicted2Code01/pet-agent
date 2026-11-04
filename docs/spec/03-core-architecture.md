@@ -11,7 +11,7 @@
                 │                         CORE                          │
                 │  Application services: command & query handlers       │
                 │  Policy: authorization, sensitivity, redaction        │
-                │  Domain: entities, invariants, schedulers, safety     │
+                │  Kernel: entities, invariants, schedulers, safety     │
                 │  rules (can_administer, whats_next), event creation   │
                 └───────────────────────────┬───────────────────────────┘
                                             │ ports (interfaces the core owns)
@@ -26,6 +26,7 @@
 Rules:
 - The core depends only on its own ports. No HTTP, SQL, LLM SDK or chat library is imported inside the core.
 - **Driving adapters never touch storage.** The web app, MCP server and AI assistant all go through the same command/query API, with the same authorization.
+- **The domain layer is the kernel**: pure, synchronous and deterministic, one TypeScript artifact that runs unchanged on every host ([07](07-portable-core.md)). The server's answers are authoritative; answers computed on devices are advisory and re-checked on sync.
 - **AI is an adapter on both sides.** As a *driving* adapter, the assistant turns natural language into core queries and commands. As a *driven* port (`LanguageModel`), the core may ask for prose (a visit-report summary) or for drafts that a person must confirm (care-note import, §3.8.1), but never for a fact or a decision.
 
 ## 3.2 Caller context
@@ -74,7 +75,7 @@ Each command validates input, checks policy, enforces invariants, writes through
 
 ## 3.4 Queries (reads)
 
-Queries return structured, typed results, ready for any adapter to render. The safety-relevant ones are deterministic and explain themselves.
+Queries return structured, typed results, ready for any adapter to render. The safety-relevant ones are deterministic and explain themselves. Every instant returned for display comes with local wall-clock fields computed by the kernel; clients format those fields, never the instant ([07 §7.5](07-portable-core.md#75-time)).
 
 | Query | Returns |
 |---|---|
@@ -101,7 +102,7 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Timeline(scope = trip / pet, viewer)` | One stream merging messages from every channel with events (doses, tasks, incidents, moves), each tagged with where it came from, filtered by what the viewer may see. |
 | `OpenCorrections(scope)` | Corrections not yet applied or dismissed, with their drafts. |
 | `History(subject_id)` | Every revision of a record: what changed, who changed it, when, why, through which channel, and what prompted it (a draft, a correction, an import). |
-| `ExplainAnswer(message_id)` | Replays an assistant answer as of its `as_of`: the records exactly as they were, the computed results it quoted, and what has changed since. |
+| `ExplainAnswer(message_id)` | Replays an assistant answer as of its `as_of`, with the kernel build and time-zone snapshot it recorded: the records exactly as they were, the computed results it quoted, and what has changed since. |
 
 ## 3.5 Events
 
@@ -345,8 +346,12 @@ Usage is charged to the account in the caller context: a sitter chatting about t
 
 Safety-critical answers (`CanAdminister`, `WhatsNext`, `Today`, `EmergencyCard`) are deterministic core queries and never touch a model (principle 2). When the allotment runs out, chat and generated prose pause, nothing else. Every interface keeps a non-AI path to those answers: the app shows the structured what's-next and medication cards, and bots fall back to plain commands.
 
-## 3.11 Suggested tech (to confirm)
+## 3.11 Runtime and tech
 
-- **Core:** Python 3.12+ with typed dataclasses / Pydantic for the domain and a hand-written repository layer (SQLAlchemy Core), to reuse prototype knowledge. TypeScript end to end is the alternative if the web/mobile apps lead. See open questions.
-- **API:** HTTP + JSON with an OpenAPI schema generated from command/query types, so every client and the MCP tool list are generated from one definition.
-- **Tests:** property tests for recurrence/DST and `can_administer`; a fixed `Clock` everywhere.
+Decided (Q13): **TypeScript compiled to plain JavaScript.** The full design is in [07](07-portable-core.md).
+
+- **Kernel and services.** The kernel is one strict-mode script with ES2017 syntax and a JSON-string interface, `dispatch(op, requestJson)`. Core services are asynchronous and reach the outside world only through the ports, supplied as one host object.
+- **Shims.** Hosts may supply capabilities: the clock, randomness, timers, logging, storage. They never supply anything that decides a result. Time-zone data, recurrence and exact decimals are bundled inside the kernel, because hosts' own time-zone data disagree today.
+- **Hosts.** Node on the server and the owner's machine, browsers and the owner-app shell for MVP. JavaScriptCore, Hermes, the AndroidX sandbox, Jint and ClearScript follow ([07 §7.10](07-portable-core.md#710-supported-hosts)).
+- **API.** HTTP + JSON with an OpenAPI schema generated from the command and query schemas, so every client, the MCP tool list and native types (Swift, Kotlin, C#) come from one definition.
+- **Tests.** One conformance corpus, compared byte for byte on every supported engine, plus property tests and differential oracles for time zones and recurrence ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)).
