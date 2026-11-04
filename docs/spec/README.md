@@ -81,6 +81,6 @@ These come straight from lessons learned building the hackathon prototype.
 | **Revision** | One immutable version of a record: its values, when they took effect, when the system recorded them, who made the change and why. |
 | **Channel** | A way people reach a thread: the app, the website, SMS, WhatsApp, Discord. A message is stored once and delivered on each person's channels. |
 | **Channel identity** | A person's account on an outside channel (a phone number, a Discord user), verified with a one-time code before its messages are accepted. |
-| **Kernel** | The pure, deterministic part of the core: one TypeScript artifact, called with JSON in and JSON out, that gives the same answer on every host. |
+| **Kernel** | The pure, deterministic part of the core: one JavaScript build compiled from TypeScript, called with JSON in and JSON out, that gives the same answer on every host. |
 | **Time-zone snapshot** | One pinned, signed copy of the IANA time-zone database the kernel uses, named by a `snapshotId`. Updated as data, without an app release. |
 | **Decision record** | What was asked, which kernel and snapshot answered, and the exact answer, kept so any safety answer can be replayed later. |

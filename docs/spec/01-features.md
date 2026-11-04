@@ -76,8 +76,8 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Feature | Priority | Notes |
 |---|---|---|
 | Structured medication orders: drug, strength, dose, route, frequency, scheduled vs. as-needed (PRN), start/end, prescriber | MVP | Plus the owner's verbatim instructions. Fractional doses (½ tablet), ml by syringe and clicks. 06 #11. |
-| Safety limits: minimum interval between doses, maximum doses per day, "not before" date/time | MVP | "Cerenia: not before Tue Nov 3, 08:00." |
-| ★ **Can I give it now?**: a computed answer with the reason and the next allowed time | MVP | Never left to an LLM. Our lead feature. Answers "yes", "not yet", or "can't confirm" when another device's doses might be missing, and fails closed ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). 06 #7. |
+| Safety limits: minimum interval between doses, maximum doses in a rolling window (e.g. 2 in any 24 hours), "not before" date/time | MVP | "Cerenia: not before Tue Nov 3, 08:00." |
+| ★ **Can I give it now?**: a computed answer with the reason and the next allowed time | MVP | Never left to an LLM. Our lead feature. Answers "yes", "not yet", or "can't confirm" when it can't be sure the dose history or the device's clock is current, and fails closed ([07 §7.7](07-portable-core.md#77-where-answers-are-authoritative)). 06 #7. |
 | A dose that already happened is always recorded; if it broke the limits, the owner and caregivers are alerted at once | MVP | Never refused, so the history stays true and later answers stay right. |
 | **Medication reminders** that persist until answered, with Taken / Snooze / Skip from the notification | MVP | See 1.6. 06 #1. |
 | Administration log: given, partial, refused, spat out, vomited, skipped, with dose, by whom, when | MVP | Shared with every caregiver. 06 #2. |

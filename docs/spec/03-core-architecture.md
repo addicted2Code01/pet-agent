@@ -9,10 +9,11 @@
                                             │ commands / queries (+ caller context)
                 ┌───────────────────────────▼───────────────────────────┐
                 │                         CORE                          │
-                │  Application services: command & query handlers       │
-                │  Policy: authorization, sensitivity, redaction        │
-                │  Kernel: entities, invariants, schedulers, safety     │
-                │  rules (can_administer, whats_next), event creation   │
+                │  Core services: command & query handlers (async)      │
+                │  Kernel: entities, invariants, recurrence, safety     │
+                │  rules (can_administer, whats_next), policy           │
+                │  (authorization, sensitivity, redaction), metering,   │
+                │  event creation                                       │
                 └───────────────────────────┬───────────────────────────┘
                                             │ ports (interfaces the core owns)
             ┌───────────────────────────────▼───────────────────────────────────┐
@@ -26,7 +27,7 @@
 Rules:
 - The core depends only on its own ports. No HTTP, SQL, LLM SDK or chat library is imported inside the core.
 - **Driving adapters never touch storage.** The web app, MCP server and AI assistant all go through the same command/query API, with the same authorization.
-- **The domain layer is the kernel**: pure, synchronous and deterministic, one TypeScript artifact that runs unchanged on every host ([07](07-portable-core.md)). The server's answers are authoritative; answers computed on devices are advisory and re-checked on sync.
+- **The domain layer is the kernel**: pure, synchronous and deterministic, one JavaScript build, compiled from TypeScript, that runs unchanged on every host ([07](07-portable-core.md)). The server's answers are authoritative; answers computed on devices are advisory and re-checked on sync.
 - **AI is an adapter on both sides.** As a *driving* adapter, the assistant turns natural language into core queries and commands. As a *driven* port (`LanguageModel`), the core may ask for prose (a visit-report summary) or for drafts that a person must confirm (care-note import, §3.8.1), but never for a fact or a decision.
 
 ## 3.2 Caller context
@@ -64,7 +65,7 @@ Each command validates input, checks policy, enforces invariants, writes through
 | Pets | `CreatePet`, `UpdatePet`, `RecordPetLocation`, `RecordWeight` |
 | Items | `CreateItem`, `UpdateItem`, `SetHomePlace`, `MoveItem`, `RecordSighting`, `ReturnItemHome`, `ArchiveItem` |
 | Inventory | `SetSupplyLevel` (plenty / low / out), `Restock`, `RecordConsumption`, `CountStock`, `TransferStock`, `SetStockThresholds`, `AddToShoppingList`, `MarkBought` |
-| Medications | `CreateMedicationOrder`, `ReviseMedicationOrder`, `SetNotBefore`, `PauseOrder`, `DiscontinueOrder`, `RecordAdministration`, `OverrideAndRecordAdministration` |
+| Medications | `CreateMedicationOrder`, `ReviseMedicationOrder`, `SetNotBefore`, `PauseOrder`, `DiscontinueOrder`, `RecordAdministration` (with the `can_administer` answer, and the caregiver's confirmation if it was `unverified`), `OverrideAndRecordAdministration` |
 | Care | `CreateRoutine`, `UpdateRoutine`, `PauseRoutine`, `CompleteTask`, `SkipTask`, `SnoozeTask`, `UndoTaskCompletion` (time-limited), `AnswerReminder` (Taken / Snooze / Skip from a notification; becomes `RecordAdministration`, `CompleteTask`, `SnoozeTask` or `SkipTask`) |
 | Setup | `ApplyTemplate`, `ImportCareNote`, `AcceptDraft`, `EditDraft`, `RejectDraft` |
 | Notifications | `SetNotificationPreferences` |
@@ -80,13 +81,13 @@ Each command validates input, checks policy, enforces invariants, writes through
 
 ## 3.4 Queries (reads)
 
-Queries return structured, typed results, ready for any adapter to render. The safety-relevant ones are deterministic and explain themselves. Every instant returned for display comes with local wall-clock fields computed by the kernel; clients format those fields, never the instant ([07 §7.5](07-portable-core.md#75-time)).
+Queries return structured, typed results, ready for any adapter to render. The safety-relevant ones are deterministic and explain themselves. Every instant returned for display comes with local wall-clock fields computed by the kernel in the site's zone, and also in the viewer's `time_zone` when it differs ([02 §2.4](02-domain-model.md#24-identity-tenancy--access)); clients format those fields, never the instant ([07 §7.5](07-portable-core.md#75-time)).
 
 | Query | Returns |
 |---|---|
 | `WhatsNext(scope = site / pet / engagement)` | Overdue tasks first, then the next due task, each with routine, pet, window and instructions. |
 | `Today(scope)` | All of today's tasks (in the site's local day) with status. |
-| `CanAdminister(order_id)` | `{allowed, reason, next_allowed_at, last_given_at, doses_in_window, instructions_verbatim}` |
+| `CanAdminister(order_id)` | `{decision, reasons, next_allowed_at, last_given_at, doses_in_window, history_confirmed_at, snapshot_id, instructions_verbatim}`. `decision` is `allowed` (shown as "yes"), `denied` ("not yet") or `unverified` ("can't confirm"), which fails closed ([02 §2.8](02-domain-model.md#28-medications)). |
 | `MedicationSummary(pet_id)` | Active orders with last dose, next due and remaining stock. |
 | `WhereIs(query)` | Ranked matches across pets, items, places and aliases: current placement, home place, path ("Home › Kitchen › Pantry › Shelf 2"), last seen time, photos. |
 | `WhatsIn(place_id, recursive)` | Items, stock and pets at a place or subtree. |
@@ -95,7 +96,7 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `KnowledgeFor(subject_id, include_related)` | Entries (critical first), playbooks, linked contacts. |
 | `EmergencyCard(pet_id / site_id)` | Vets, emergency vet, owner contacts, critical notes, active medications, and the vet authorization for the current engagement. Fits on one screen. |
 | `CareSheet(scope, format)` | Everything a sitter needs for a pet or an engagement, as structured data or a print layout. Never includes secret values; `private` data only if the owner opts in for that print. |
-| `OfflineBundle(engagement_id)` | A read-only snapshot of the care sheet, emergency card and the stay's tasks for the sitter's device, expiring when access ends. No secrets. |
+| `OfflineBundle(engagement_id)` | A read-only snapshot for the sitter's device, expiring with access: the care sheet, the emergency card and tasks for the next 48 hours. For each engaged pet's medications it adds the order revision in force, recent administrations, `history_confirmed_at` and the time-zone snapshot, so can-I-give-it works offline and answers "can't confirm" once the history is too old. No secret values ([04 §4.8](04-permissions-privacy.md#48-printing-offline-copies-notifications-and-import)); in the home edition, door codes are staged separately after a step-up ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
 | `Activity(scope, range)`, `Report(report_id)` | Events grouped for display; visit, daily and stay reports. |
 | `Drafts(import_job_id / template_id)` | Pending drafts with their source excerpts, for the owner to accept, edit or reject. |
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
@@ -109,7 +110,7 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Timeline(scope = trip / pet, viewer)` | One stream merging messages from every channel with events (doses, tasks, incidents, moves), each tagged with where it came from, filtered by what the viewer may see. |
 | `OpenCorrections(scope)` | Corrections not yet applied or dismissed, with their drafts. |
 | `History(subject_id)` | Every revision of a record: what changed, who changed it, when, why, through which channel, and what prompted it (a draft, a correction, an import). |
-| `ExplainAnswer(message_id)` | Replays an assistant answer as of its `as_of`, with the kernel build and time-zone snapshot it recorded: the records exactly as they were, the computed results it quoted, and what has changed since. |
+| `ExplainAnswer(message_id)` | Replays an assistant answer as of its `as_of`, with the kernel build and time-zone snapshot it recorded: the records exactly as they were, the computed results it quoted, and what has changed since. It can also re-run the answer on today's records with the same kernel and snapshot. |
 
 ## 3.5 Events
 
@@ -125,7 +126,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 
 | Job | Purpose |
 |---|---|
-| `MaterializeTasks` | Keep calendar tasks generated N days ahead; regenerate when routines change. |
+| `MaterializeTasks` | Keep calendar tasks generated N days ahead; regenerate when routines change or a new time-zone snapshot moves their instants, and alert caregivers when a dose time moves. |
 | `ReminderDispatcher` | Send reminders by each routine's `reminder_policy`; repeat until answered; escalate to the owner, then a backup contact; withdraw a reminder on every device the moment anyone completes the task. |
 | `DeliveryMonitor` | Track delivery receipts per channel; fall back to the recipient's next channel when one fails; alert us when delivery rates drop. Reliability is the product (README principle 10). |
 | `TaskStatusSweeper` | Mark tasks `missed` and raise missed-dose alerts to the owner. Reads are correct without it. |
@@ -162,7 +163,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `Vision` | Describe or identify a photo ("which item is this?") | Local VLM, hosted model, none |
 | `BarcodeLookup` | Barcode → product details | Product databases, none |
 
-Every port has a **null implementation**, so the core runs fully without AI, search engines, maps or notifications. Features degrade gracefully instead of failing.
+Every port has a **null implementation**, so the core runs fully without AI, search engines, maps or notifications. Features degrade gracefully instead of failing. On every host, these ports and the runtime members in [07 §7.3](07-portable-core.md#73-the-host-interface) (randomness, timers, logging, secure storage, server time, connectivity and lifecycle) come in one host object.
 
 Any port except `Repository`/`UnitOfWork` can also be served by a `RemoteCapability` adapter that forwards calls to the owner's edge node (§3.9.2). `LanguageModel` and `Vision` are only ever called through the `ModelGateway`, which routes and meters them (§3.10).
 
@@ -211,7 +212,7 @@ Rules:
 - **If the sitter already acted** on the answer, the logged dose appears in the thread next to the correction, so the owner sees it at once and can follow the medication's instructions or call the vet.
 - **Corrections respect versions.** A draft is made against the record's current version. If the record changes before the owner applies it (an edit on the website, say), the draft goes stale and the assistant re-drafts against the new version. If a later edit already covers the correction, the owner is asked whether to resolve it.
 - **Wrong facts are marked, not erased.** If the correction is that something recorded never happened ("he didn't get his 8:00 dose; I logged it by mistake"), the draft marks that record `entered_in_error`. The history keeps both what was believed and what was true.
-- **Corrections are measured, and classified without reading the conversation.** How often answers get corrected is an AI quality measure ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)). Replaying the corrected answer with the records as they are now (`ExplainAnswer`) separates the causes: if the replayed answer changes, the records were missing or wrong; if it doesn't, the answer itself was wrong. Reading the conversation still needs the owner's permission.
+- **Corrections are measured, and classified without reading the conversation.** How often answers get corrected is an AI quality measure ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)). Replaying the corrected answer on the records as they are now, with the kernel build and time-zone snapshot it recorded (`ExplainAnswer`), separates the causes: if the replayed answer changes, the records were missing or wrong; if it doesn't, the answer itself was wrong. A difference that appears only with the current kernel or snapshot is a code or data change, not a record error. Reading the conversation still needs the owner's permission.
 
 ### 3.8.3 One thread, many channels
 
@@ -363,6 +364,6 @@ Decided (Q13): **TypeScript compiled to plain JavaScript.** The full design is i
 
 - **Kernel and services.** The kernel is one strict-mode script with ES2017 syntax and a JSON-string interface, `dispatch(op, requestJson)`. Core services are asynchronous and reach the outside world only through the ports, supplied as one host object.
 - **Shims.** Hosts may supply capabilities: the clock, randomness, timers, logging, storage. They never supply anything that decides a result. Time-zone data, recurrence and exact decimals are bundled inside the kernel, because hosts' own time-zone data disagree today.
-- **Hosts.** Node on the server and the owner's machine, browsers and the owner-app shell for MVP. JavaScriptCore, Hermes, the AndroidX sandbox, Jint and ClearScript follow ([07 §7.10](07-portable-core.md#710-supported-hosts)).
+- **Hosts.** For MVP: Node on the cloud server, browsers and the owner-app shell; Node on the owner's machine comes with the home edition (V2). JavaScriptCore, Hermes, the AndroidX sandbox, Jint and ClearScript follow ([07 §7.10](07-portable-core.md#710-supported-hosts)).
 - **API.** HTTP + JSON with an OpenAPI schema generated from the command and query schemas, so every client, the MCP tool list and native types (Swift, Kotlin, C#) come from one definition.
 - **Tests.** One conformance corpus, compared byte for byte on every supported engine, plus property tests and differential oracles for time zones and recurrence ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)).

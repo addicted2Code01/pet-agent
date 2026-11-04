@@ -65,7 +65,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - `Context()` builds the assistant's snapshot *after* redaction for the calling interface, so redaction can't be bypassed by asking cleverly.
 - AI usage records hold token counts and costs, never prompt or reply text. Assistant answers to caregivers are kept only in the care thread (§4.9).
 - An edge node offers only the fixed capabilities the owner turns on. Pairing it doesn't let the cloud run commands on the owner's machine.
-- Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Medication writes through AI require the same safety checks, and can be configured to require a tap-to-confirm in the client.
+- Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Medication writes through AI require the same safety checks and a tap-to-confirm (on SMS, a confirming reply) from the person the assistant acts for.
 
 ## 4.5 Media privacy
 
@@ -77,7 +77,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 
 - **Export**: all of an account's data as JSON + media, from the core's own model.
 - **Deletion**: account deletion soft-deletes immediately, revokes all access, and hard-deletes after a short recovery period. Secrets and keys are destroyed first.
-- **Retention**: event log and administrations kept for the account's lifetime (medical history); secret-reveal logs and the security log (joins, approvals, step-ups, revocations) kept for at least 1 year. Record revisions are kept for the account's lifetime too, so any answer can be explained later; secret values are the exception and are destroyed on rotation ([02 §2.1](02-domain-model.md#versions--history)).
+- **Retention**: event log and administrations kept for the account's lifetime (medical history); secret-reveal logs and the security log (joins, approvals, step-ups, revocations) kept for at least 1 year. Record revisions are kept for the account's lifetime too, so any answer can be explained later; secret values are the exception and are destroyed on rotation ([02 §2.1](02-domain-model.md#versions--history)). Decision records are kept, exported and deleted with the administrations and messages they explain.
 
 ## 4.7 Disclaimers & safety
 

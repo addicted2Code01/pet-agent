@@ -102,11 +102,11 @@ This replaces the earlier no-account sitter link. Every care-guide competitor st
 
 **Q25. Minimum OS and browser versions.** The kernel needs only ES2017, but the apps need more: web push on iPhone needs iOS 16.4+, and current Android WebView builds need Android 10+. Every supported version also has to be in the device test matrix ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)).
 
-*Recommendation:* iOS and iPadOS 16.4+, Android 10+, and the current and previous major versions of Chrome, Edge, Firefox and Safari, plus the current Firefox ESR.
+*Recommendation:* for the owner app, iOS and iPadOS 16.4+ and Android 10+. For the web app and the sitter's view, the current and previous major versions of Chrome, Edge, Firefox and desktop Safari, Firefox ESR 153, and on iPhone and iPad every iOS version the app supports, since browsers there use the system WebKit. Decide whether sitters on Android 7 to 9, which no longer get current Chromium, get a best-effort view; the kernel needs only ES2017.
 
 **Q26. What happens to a dose time that doesn't exist on the night clocks go forward?** At 02:30 on a spring-forward night there is no 02:30. RFC 5545 skips the occurrence; other libraries shift it forward. A skipped dose is a safety problem ([07 §7.5](07-portable-core.md#75-time)).
 
-*Recommendation:* shift it to the first valid time after the gap and flag it to the caregiver. In the autumn overlap, use the first occurrence. Store the policy on each schedule, so it can be changed per medication.
+*Recommendation:* move it later by the length of the gap (02:30 becomes 03:30, as Temporal's default and RFC 5545's rule for single date-times do) and flag it to the caregiver. In the autumn overlap, use the first occurrence. Store the policy on each schedule, so it can be changed per medication.
 
 ## Home and cloud editions
 
