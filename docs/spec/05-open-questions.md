@@ -89,7 +89,7 @@ This replaces the earlier no-account sitter link. Every care-guide competitor st
 
 **Q22. Which AI answers should notify the owner right away?** Every answer is visible in the care thread as it happens, but a notification for each one would be noise.
 
-*Recommendation:* notify at once for answers about medication, health or incidents. Show the rest in the thread and the daily report. Per trip, the owner can switch to "notify me of every answer".
+*Recommendation:* notify at once for answers about medication, health or incidents. Show the rest in the thread and the daily report. Per trip, the owner can switch to "notify me of every answer". Questions the assistant passes to the owner always notify at once.
 
 **Q23. Should an owner be able to hold the AI's medication answers for approval?** For a new sitter or a risky medication, an owner may want to see an answer before the sitter does.
 

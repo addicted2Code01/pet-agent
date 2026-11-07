@@ -69,7 +69,7 @@ Each command validates input, checks policy, enforces invariants, writes through
 | Care | `CreateRoutine`, `UpdateRoutine`, `PauseRoutine`, `CompleteTask`, `SkipTask`, `SnoozeTask`, `UndoTaskCompletion` (time-limited), `AnswerReminder` (Taken / Snooze / Skip from a notification; becomes `RecordAdministration`, `CompleteTask`, `SnoozeTask` or `SkipTask`) |
 | Setup | `ApplyTemplate`, `ImportCareNote`, `AcceptDraft`, `EditDraft`, `RejectDraft` |
 | Notifications | `SetNotificationPreferences` |
-| Care threads | `PostMessage` (from any channel), `EditMessage` (people's messages only; a new revision), `CorrectAnswer` (a reply that flags an answer as wrong), `ResolveCorrection` (applied or dismissed), `SetThreadNotifications` |
+| Care threads | `PostMessage` (from any channel), `EditMessage` (people's messages only; a new revision), `CorrectAnswer` (a reply that flags an answer as wrong), `AskOwner` (the assistant passes on a question the records don't answer), `ResolveCorrection` (applied or dismissed), `SetThreadNotifications` |
 | Channels | `SetTripChannels` (which channels a trip allows), `LinkChannelIdentity` (verify with a one-time code), `RevokeChannelIdentity`, `BindThreadChannel`, `UnbindThreadChannel` |
 | History | `RestoreRevision` (writes a new revision with old values), `MarkEnteredInError` (a dose, sighting, completion or stock transaction, with a reason) |
 | Knowledge | `CreateKnowledgeEntry`, `ReviseKnowledgeEntry`, `ArchiveKnowledgeEntry`, `CreateSecret`, `RotateSecret`, `RevealSecret` (a command, because it's logged) |
@@ -173,7 +173,7 @@ The assistant is a driving adapter with this loop:
 
 1. Build a prompt from `Context(scope, budget)`: compact, current, permission-filtered.
 2. Expose core **queries and commands as tools** (`whats_next`, `can_administer`, `where_is`, `complete_task`, `record_administration`, `report_incident`…), each a thin wrapper running with the user's `CallerContext` (`interface = "assistant"`, `on_behalf_of = user`).
-3. The model chooses tools and phrases results. **Facts come only from tool results**: doses and times are quoted from `CanAdminister` and `instructions_verbatim`, never computed by the model.
+3. The model chooses tools and phrases results. **Facts come only from tool results**: doses and times are quoted from `CanAdminister` and `instructions_verbatim`, never computed by the model. When the records don't answer a question, the assistant says so and passes it to the owner (`AskOwner`) instead of guessing. The owner's reply goes back to the sitter, and the assistant drafts it as a record that the owner saves with one tap (principle 11).
 4. Writes requested through the assistant ("I gave him his pill") go through the same commands, so they're validated, safety-checked and logged as *assistant on behalf of Jane*. One that records or changes a dose, a medication or a schedule waits until the person the assistant acts for confirms it ([04 §4.4](04-permissions-privacy.md#44-ai-and-external-interfaces)).
 5. The assistant's own model calls go through the `ModelGateway` (§3.10), so they're routed by sensitivity and metered against the account's allotment.
 6. During an engagement, every answer is posted to the care thread with its `sources` (the records and versions it used), so the owner sees it live and can correct it (§3.8.2).
@@ -229,6 +229,7 @@ A trip has one care thread, but people reach it in different ways: the owner in 
 - The assistant answers on the channel where it was asked. Other participants get the answer according to the thread's notification policy (Q22).
 - Each channel renders the same message its own way. Discord and WhatsApp show an "Apply" button on a draft; SMS gets plain text with a short link that opens the draft in the app after sign-in.
 - Channel rules belong in the adapter: WhatsApp's 24-hour reply window and approved message templates, SMS opt-out ("STOP"), Discord rate limits. Paid channels (SMS, WhatsApp) are metered like AI usage (§3.10).
+- A person can follow a trip entirely in a one-to-one chat with a bot, such as the owner's Discord DM. Their side of the thread arrives there under the notification policy, and their replies come back as messages, corrections or answers ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)).
 
 **The combined view.** `Thread`, `Timeline` and `Inbox` merge every channel into one stream, ordered by when the core received each message, with a badge showing where each came from. Both sides see the same conversation: the owner sees everything, and the sitter sees the whole trip thread, including what the owner sent from Discord, on whichever channel they use. Because `Context()` includes the merged thread, the assistant answering on WhatsApp knows what the owner said on Discord.
 

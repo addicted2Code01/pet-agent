@@ -680,6 +680,7 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 | `status` | enum | `active` · `corrected` (someone corrected it) · `superseded` (an updated answer replaced it) |
 | `corrected_by_id?` | Message | The correction that flagged it. |
 | `resolution?` | enum | For corrections: `open` · `applied` (its drafts were accepted) · `dismissed` · `expired` (the engagement ended). A correction is pinned while `open`. |
+| `owner_question?` | `{status, answer_id?}` | Set when the assistant couldn't answer from the records and passed the question to the owner: `open` until an owner or family member answers, then `answered`; `expired` when the engagement ends. |
 
 Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying the channel's message id, so a reply on any channel maps back to the message it answers.
 
