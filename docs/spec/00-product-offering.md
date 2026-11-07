@@ -10,7 +10,7 @@ The sharpest starting point is **households with a pet on medication or special 
 
 The people they hand off to (sitters, dog walkers, friends, family) use it free. They get set up by scanning a QR code: no app to install, no password, no sign-up form.
 
-Households that want their data to stay at home can run the **home edition** on their own always-on computer or NAS, with the same experience ([08](08-home-and-cloud.md)).
+Households that want their data to stay at home can run the **home edition** on their own always-on computer or NAS. Connected to Pawsitter's companion services, it works like the cloud. Standalone, it uses no Pawsitter services at all and does what the owner's own setup allows, such as Tailscale for access and a Discord bot for reminders ([08](08-home-and-cloud.md)).
 
 ## 0.2 The promise
 
@@ -89,9 +89,10 @@ Principles, from the complaints in [06 §6.5](06-feature-research.md#65-complain
 | AI assistant | – | Monthly allotment |
 | Edge node: local model, home-held keys | – | V2 |
 
-**Home edition** (from the home beta, [08](08-home-and-cloud.md)). Household data stays on the owner's computer, and it still uses Pawsitter's companion services.
+**Home edition** (from the home beta, [08](08-home-and-cloud.md)). Household data stays on the owner's computer. A connected install still uses Pawsitter's companion services:
 - **Free:** sitter access through the relay; reminders, push and the watchdog; backup reminders and staged door codes for outages; encrypted off-site backup of the structured data. Sharing with a sitter is always free, and safety is never paywalled.
 - **Plus:** relay bandwidth above a cap (photos), media backup, and the hosted assistant.
+- **Standalone** installs use no Pawsitter services; their price is open (Q34).
 
 Exact limits are open (Q31).
 

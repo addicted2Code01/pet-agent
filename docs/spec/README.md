@@ -1,6 +1,6 @@
 # Pawsitter product spec
 
-Status: **draft 0.7**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); owner oversight of every AI answer given to a sitter, through a care thread that combines every channel; full version history on every record; a portable TypeScript core that gives the same answers on every host ([07](07-portable-core.md)); and cloud and home editions from one codebase, with sitters set up by scanning a QR code ([08](08-home-and-cloud.md)). Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
+Status: **draft 0.8**. Decided: households first; cloud first with configurable placement; pluggable AI with metered hosted usage; an MVP feature set based on the [feature research](06-feature-research.md); owner oversight of every AI answer given to a sitter, through a care thread that combines every channel; full version history on every record; a portable TypeScript core that gives the same answers on every host ([07](07-portable-core.md)); and cloud and home editions from one codebase, with sitters set up by scanning a QR code, and home installs that can run standalone, without Pawsitter's services ([08](08-home-and-cloud.md)). Open decisions are tracked in [05-open-questions.md](05-open-questions.md).
 
 ## What we're building
 
@@ -22,7 +22,7 @@ At its heart is a **core** that knows nothing about AI, chat, MCP, Discord or an
 | 5 | [Open questions](05-open-questions.md) | Decisions needed before building |
 | 6 | [Feature research](06-feature-research.md) | What customers value in existing apps; features ranked for us |
 | 7 | [Portable core runtime](07-portable-core.md) | One TypeScript kernel for every host: shims, time zones, authority, integrity, supported engines, conformance |
-| 8 | [Home and cloud editions](08-home-and-cloud.md) | One codebase hosted or at home: HTTPS for home installs, QR joins, sign-in options, revocation, outages, updates, backups, companion services |
+| 8 | [Home and cloud editions](08-home-and-cloud.md) | One codebase hosted or at home: HTTPS for home installs, QR joins, sign-in options, revocation, outages, updates, backups, companion services, standalone mode |
 
 ## Design principles
 
@@ -53,9 +53,10 @@ These come straight from lessons learned building the hackathon prototype.
 | **Sitter join** | Getting a sitter set up by scanning a QR code the owner sends, shows or prints, confirmed by a second factor. The sitter becomes a lightweight user: no app, password or sign-up form. Replaced the earlier no-account sitter link. |
 | **Device** | One browser or app instance of a person. In the cloud, a **device grant** gives it access to one account, so a join in one household never opens another. |
 | **Home install** | The home edition running on the owner's always-on Mac, Windows PC or NAS, holding that household's data. |
-| **Home Link** | A home install's one outbound, mutually authenticated connection to Pawsitter's companion services. |
+| **Home Link** | A connected home install's one outbound, mutually authenticated connection to Pawsitter's companion services. |
 | **Relay** | Pawsitter's service that passes encrypted traffic to a home install's own HTTPS name without decrypting it, so the install works from any network without port forwarding. |
-| **Companion services** | The cloud services a home install uses (relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates). They hold operational records such as routing data and ciphertext, not care records, except a discreet backup reminder schedule ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| **Companion services** | The cloud services a connected home install uses (relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates). They hold operational records such as routing data and ciphertext, not care records, except a discreet backup reminder schedule ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| **Standalone mode** | A home install running without Pawsitter's services, using only what the owner sets up, such as Tailscale, a Discord bot and their own backups. A *connected* install uses the companion services instead. |
 | **Handback** | The owner tapping "I'm home": the engagement ends, access closes, and the stay summary goes out. |
 | **Site** | A real-world location with an address and time zone: a home, clinic, boarding facility, vacation home or vehicle. |
 | **Place** | A spot inside a site, nested to any depth: room → furniture → shelf → container. |

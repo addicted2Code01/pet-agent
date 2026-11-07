@@ -1,16 +1,16 @@
 # 8. Home and cloud editions
 
-One codebase runs in two ways: as a hosted service (**cloud**), or on the owner's own always-on computer or NAS (**home**). In both, a sitter gets set up by scanning a QR code.
+One codebase runs in two ways: as a hosted service (**cloud**), or on the owner's own always-on computer or NAS (**home**). A home install is either *connected* to Pawsitter's companion services or runs *standalone*, with only what the owner sets up (§8.15). In every case, a sitter gets set up by scanning a QR code.
 
 How this was decided, on 2026-11-04:
-- Four research areas (HTTPS on a home network, sign-in and pairing, remote access and push, packaging) were fact-checked: 142 checks, with 77 confirmed, 22 corrected and 43 unverifiable. Most unverifiable ones match known facts but weren't re-read; those that need testing on real devices are listed as hypotheses in §8.18.
+- Four research areas (HTTPS on a home network, sign-in and pairing, remote access and push, packaging) were fact-checked: 142 checks, with 77 confirmed, 22 corrected and 43 unverifiable. Most unverifiable ones match known facts but weren't re-read; those that need testing on real devices are listed as hypotheses in §8.19.
 - Three independent designs were then written (simplicity first, unified experience first, security first). A judge scored them, picked "unified experience" (22 points, against 21 and 20) and grafted in 23 ideas from the other two.
 - A red-team review followed, and its fixes are built in below.
 
 ## 8.1 The decisions
 
 1. **One TypeScript codebase, two composition roots.** *Cloud* is multi-tenant: Postgres, S3, KMS. *Home* serves one household from an always-on Mac, Windows PC or NAS: SQLite, local disk, a local key. Each account's data lives in exactly one of them (README principle 8).
-2. **Home is relay-first.** Every home install gets its own HTTPS name. Pawsitter's relay passes encrypted traffic through to it without decrypting, so the same address works on the home Wi-Fi, guest Wi-Fi, mobile data and abroad, with no port forwarding (§8.4).
+2. **Connected home installs are relay-first.** Each one gets its own HTTPS name. Pawsitter's relay passes encrypted traffic through to it without decrypting, so the same address works on the home Wi-Fi, guest Wi-Fi, mobile data and abroad, with no port forwarding (§8.4).
 3. **One QR join for both editions.** A code that's sent, shown on a screen or printed opens the same join flow. A second factor binds it to the right person (§8.7).
 4. **Every sitter is a real, lightweight user.** No password, no app and no sign-up form, but their own identity, with access bounded by the trip and revocable at once.
    - Cloud sitters have one login across every household they sit for.
@@ -18,6 +18,7 @@ How this was decided, on 2026-11-04:
    - This replaces the no-account sitter link (Q11).
 5. **Home owners choose their sign-in options from a menu** with a recommended default (§8.6).
 6. **Companion services hold operational records such as routing data and ciphertext, never care records** (§8.14). These are the relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog and updates. The one declared exception is a discreet reminder schedule that keeps medication reminders going if the home goes dark (§8.10).
+7. **A home install can also run standalone**, without Pawsitter's services. It uses what the owner sets up, such as Tailscale, their own domain, a Discord bot and their own backup target, and does as much as those allow (§8.15).
 
 **Why not just serve plain HTTP on the home network?**
 - An address like `http://192.168.1.20` isn't a secure context. Browsers then give no passkeys, no service worker (so no offline copy and no web push), no camera, no `crypto.subtle` and no `Secure` cookies. All of this was checked in Chrome 153.
@@ -27,18 +28,18 @@ How this was decided, on 2026-11-04:
 
 ## 8.2 What each edition promises
 
-| Situation | Cloud | Home |
-|---|---|---|
-| Where household data lives | Pawsitter's cloud | The owner's computer or NAS |
-| Owner away on the trip | Works anywhere | Works anywhere, through the relay |
-| Sitter on mobile data or guest Wi-Fi | Works | Works, through the relay |
-| Home internet down | Unaffected | Offline copy, printed care sheet, cloud backup reminders and door codes staged on the sitter's phone; reminders and the copy's tasks cover about 48 hours (§8.10) |
-| Pawsitter's cloud down | Down | The home keeps running and sends web push, but its name routes through the relay: without split DNS, even people in the house have only the offline copy. SMS, email and native push stop |
-| Host computer asleep or off | n/a | Like an internet outage; the watchdog alerts the owner |
-| Owner needs a Pawsitter account | Yes | Yes for a connected install (pairing, relay, alerts, billing); the data stays home |
-| Owner's effort | None | An always-on machine; certificates, updates and backups are automatic |
+| Situation | Cloud | Home, connected | Home, standalone (§8.15) |
+|---|---|---|---|
+| Where household data lives | Pawsitter's cloud | The owner's computer or NAS | The owner's computer or NAS |
+| Owner away on the trip | Works anywhere | Works anywhere, through the relay | Through Tailscale or the owner's own domain, if set up |
+| Sitter on mobile data or guest Wi-Fi | Works | Works, through the relay | Through Tailscale Funnel or the owner's own domain; otherwise Discord and the printed care sheet |
+| Home internet down | Unaffected | Offline copy, printed care sheet, cloud backup reminders and door codes staged on the sitter's phone; reminders and the copy's tasks cover about 48 hours (§8.10) | Offline copy, printed care sheet, staged door codes and dose alarms on the sitter's phone; no reminders from outside |
+| Pawsitter's cloud down | Down | The home keeps running and sends web push, but its name routes through the relay: without split DNS, even people in the house have only the offline copy. SMS, email and native push stop | Unaffected |
+| Host computer asleep or off | n/a | Like an internet outage; the watchdog alerts the owner | Like an internet outage; the owner hears only through an outside monitor they set up |
+| Owner needs a Pawsitter account | Yes | Yes (pairing, relay, alerts, billing); the data stays home | No |
+| Owner's effort | None | An always-on machine; certificates, updates and backups are automatic | Also setting up the ways in, notifications and a backup target; after that, certificates and backups are automatic |
 
-The home edition keeps data **at rest** at home. It still relies on Pawsitter for the relay, DNS, certificates, SMS, email and native push. Setup says so plainly, with this table.
+Both home modes keep data **at rest** at home. A connected install still relies on Pawsitter for the relay, DNS, certificates, SMS, email and native push; a standalone one relies only on the services its owner set up. Setup says so plainly, with this table.
 
 ## 8.3 Architecture
 
@@ -56,17 +57,17 @@ The home edition keeps data **at rest** at home. It still relies on Pawsitter fo
 **Home only:**
 - the SQLite store (Node's built-in `node:sqlite`, which Bun also implements);
 - the home composition root and the Home Link client;
-- the notifier that sends through the companion services;
+- the notifiers that send through the companion services or, standalone, through the owner's own accounts;
 - the tray app and the installers.
 
-**Nothing in the kernel or services knows which edition it's in.** An edition is only a choice of adapters at the composition root, plus `CallerContext.transport` (`loopback`, `lan`, `relay` or `cloud`). One contract and end-to-end suite runs against both compositions.
+**Nothing in the kernel or services knows which edition it's in.** An edition is only a choice of adapters at the composition root, plus `CallerContext.transport` (`loopback`, `lan`, `relay`, `tunnel` or `cloud`). One contract and end-to-end suite runs against both compositions.
 
 **Home topology.** The home core runs under a dedicated OS user and holds the kernel, services, SQLite database, media, keys, jobs and the web app.
 - Listeners:
   - `localhost`, for the setup and recovery console only;
   - no inbound ports from the internet;
   - an optional LAN listener (§8.4) that checks every `Host` header against the install's names.
-- One outbound **Home Link**, mutual TLS with a certificate from Pawsitter's private CA, issued at pairing. It carries:
+- On a connected install, one outbound **Home Link**, mutual TLS with a certificate from Pawsitter's private CA, issued at pairing. It carries:
   - relayed TLS streams, which the home core decrypts itself;
   - calls to the companion services;
   - inbound messages from the bridge;
@@ -100,6 +101,7 @@ The home edition keeps data **at rest** at home. It still relies on Pawsitter fo
   - *Split DNS* (power users): point the install's name at the LAN address in the router.
   - *Console* on the host itself (`http://localhost`): setup and recovery only.
 - **No plain-HTTP mode for sitters.** "Basic LAN mode" was considered and dropped. It conflicts with the rule that medical data needs HTTPS ([07 §7.12](07-portable-core.md#712-open-items)), and its cookies leak to every other service on the same host. It also doesn't help in an outage, because the sitter needs it set up in advance on a second address. The outage plan is §8.10.
+- **Standalone installs** don't use the home zone. They're reached through Tailscale, Tailscale Funnel or the owner's own domain (§8.15).
 - **Hygiene.**
   - The home core accepts only its own `__Host-` cookies.
   - Every write checks `Origin`.
@@ -120,11 +122,11 @@ The home edition keeps data **at rest** at home. It still relies on Pawsitter fo
   - Revoking a device in A removes only A's grant. Owners see only the devices that hold a grant in their account.
 - **Home: the home core is the identity provider.**
   - Users are local to the install, with passkeys on the install's name.
-  - A person can link a Pawsitter account through OIDC; the home core stays the authority for membership and revocation.
+  - On a connected install, a person can link a Pawsitter account through OIDC; the home core stays the authority for membership and revocation.
   - A Pawsitter account that's disabled is pushed down the Home Link and applied on receipt.
   - One install hosts one account.
 - **Caller context.** `CallerContext` gains:
-  - `transport`: `loopback`, `lan`, `relay` or `cloud`;
+  - `transport`: `loopback`, `lan`, `relay`, `tunnel` or `cloud`;
   - `device_id`;
   - `auth_strength`: `passkey_uv`, `otp_verified`, `approved`, `pin` or `session`.
 
@@ -162,10 +164,12 @@ Sign-in is always on, but nobody types a password. People join once by QR, and t
 
 **The beta ships one preset:** passkeys for owners, paired devices for family and sitters (joined with a code or owner approval), and a PIN for the offline step-up. The kiosk, and Pawsitter-account sign-in for family and sitters, arrive at GA. Owners can sign in to the install with their Pawsitter account from the beta, for remote recovery and, if the per-install test fails, the iOS shell (§8.9). The two no-login options aren't offered.
 
+**Standalone installs** offer the same menu without Pawsitter-account sign-in. Codes go through the owner's own email account, SMS provider or Discord bot (§8.15).
+
 ## 8.7 Joining by QR
 
 **Rules for every join, in both editions:**
-- **The link.** Every QR opens a link on Pawsitter's join domain, which redirects (a top-level navigation, never a background request) to the account's own address: the cloud, or the home install.
+- **The link.** Every QR opens a link on Pawsitter's join domain, which redirects (a top-level navigation, never a background request) to the account's own address: the cloud, or the home install. A standalone install's QR codes point straight at its own address.
 - **The secret.** It's only in the URL fragment (`#…`), so it never reaches server logs, `Referer` headers or link previews. Opening the page consumes nothing. Tapping Continue sends the secret by POST and starts a join request; the secret is spent only when the second factor passes.
 - **What the page reveals.** Until the second factor passes, only "Invite for <name> from <owner's first name>": no dates and no address, which would reveal an empty house.
 - **The second factor is tied to this browser.** It's a code sent to the contact the owner entered, or the owner's approval. The confirming link works only in the browser that started the request. Anywhere else, it says "this request started on another device". A typed code is the fallback.
@@ -230,7 +234,8 @@ The trusted side always creates the code, and the owner types it into the box, s
   - The revoke dialog says plainly that revoking can't erase what's already on the phone, and suggests rotating every code that was revealed on it or staged to it.
 - **At home:**
   - Revoking works locally even when Pawsitter's cloud is down.
-  - From the Pawsitter account, an owner can send a signed "revoke this device" command down the Home Link. If the house is unreachable, they can instead lock remote access, which tells the relay to stop routing the install. Both need a passkey step-up and alert every owner.
+  - On a connected install, an owner can also use their Pawsitter account to send a signed "revoke this device" command down the Home Link. If the house is unreachable, they can instead lock remote access, which tells the relay to stop routing the install. Both need a passkey step-up and alert every owner.
+  - A standalone install can be reached for revoking only through its own ways in. While it's unreachable, a revoked device keeps what it has until its lease lapses.
 
 ## 8.9 The owner away from home
 
@@ -246,13 +251,14 @@ The trusted side always creates the code, and the owner types it into the box, s
   - **The native owner shell.**
     - iOS: notifications with Taken / Snooze / Skip on the lock screen. Cloud sends through Apple's push service directly. Home sends through a content-blind push relay that forwards per-device ciphertext, which the app decrypts.
     - Android: a Trusted Web Activity that gets web push with actions.
-  - **SMS, email (and WhatsApp and Discord in V2)** go through the cloud messaging bridge in both editions. While a home is offline, replies are sealed to the install's key, queued, and applied in order on reconnect.
+  - **SMS, email (and WhatsApp and Discord in V2)** go through the cloud messaging bridge in the cloud and on connected installs. While a home is offline, replies are sealed to the install's key, queued, and applied in order on reconnect.
+  - **Standalone installs** send web push, Discord messages from the owner's bot, email through the owner's account, and SMS only through the owner's own provider (§8.15).
   - **Sitters with several households.** Each active (sitter, household) pair gets its own Pawsitter sender number from a pool, and replies are routed by that number pair. When a reply's household is ambiguous, "TAKEN", "SKIP" or "SNOOZE" is never applied; the sitter gets one short link per household instead. "STOP" applies to that sender number only, and the delivery monitor tells owners when a sitter's SMS has been stopped.
 - **iOS shell check before the home beta.** The iOS shell is a WKWebView app. WKWebView allows service workers only on up to 10 "App-Bound Domains", and in-app passkeys need the domain in the app's associated domains; neither is proven for an unbounded set of per-install names. If they don't work, the shell signs in to each install through the owner's Pawsitter account and keeps its offline data in native storage.
 
 ## 8.10 Outages and availability at home
 
-In the cloud, a power cut at the house changes nothing. At home, a dark house would stop reminders and door codes for the very people standing in it. The fallbacks below are decided before the home beta (Q29), not left for later.
+In the cloud, a power cut at the house changes nothing. At home, a dark house would stop reminders and door codes for the very people standing in it. The fallbacks below are decided before the home beta (Q29), not left for later. Standalone installs can't use the parts that need the cloud; their plan is in §8.15.
 
 - **Backup reminders from the cloud.**
   - While a trip with medication routines is active, the home core keeps a rolling 48-hour schedule at the bridge: due instant, channel route, escalation routes, repeat policy, discreet text and task id. It never contains medication names.
@@ -294,6 +300,7 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
 - The Home Link handshake enforces a minimum runtime. Owners are warned first; after a deadline, the relay stops routing known-vulnerable versions, but never in the middle of a trip without the owner's acknowledgement.
 - Migrations are additive: a release only adds, and a later release removes what's no longer used, so the previous release still runs on the new schema and rolling back means reinstalling it. The pre-migration snapshot is restored only if the new version never accepted a write; otherwise the fix rolls forward. A rollback never discards a recorded fact ([02 invariant 20](02-domain-model.md#218-invariants-enforced-by-the-core)).
 - Update keys live in an HSM with threshold signing, and every release is recorded in a public log.
+- Standalone installs check the public release feed, sending only their version, or are updated by hand (§8.15).
 
 **Data updates.**
 - Signed time-zone snapshots, kill switches and minimum kernel versions ([07 §7.5](07-portable-core.md#75-time), [§7.8](07-portable-core.md#78-versions-replay-and-integrity)) are pushed down the Home Link within hours of approval. This channel is separate from code updates.
@@ -308,10 +315,10 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
 - **Local snapshots.** Daily, and before every migration, with a retention policy and free-space monitoring.
   - The live database folder is excluded from OS backups such as Time Machine and File History, which can copy it mid-write; the snapshot folder is included instead.
   - SD cards and USB sticks are refused as the data volume.
-- **Encrypted off-site backup, free from the beta.** The structured data, which is small, and the wrapped key are encrypted on the device with a recovery key printed in the owner's recovery kit. Media backup is optional (Plus).
-- **Restore onto new hardware.** After Pawsitter-account sign-in, a recovery code and alerts to every owner, the new machine re-binds the **same install id and name** with a new TLS key. Passkeys, Home Screen apps and printed cards keep working. A home core can also reclaim its own name by proving its long-term key.
+- **Encrypted off-site backup, free from the beta.** The structured data, which is small, and the wrapped key are encrypted on the device with a recovery key printed in the owner's recovery kit. Media backup is optional (Plus). Standalone installs back up to a target the owner sets up (§8.15).
+- **Restore onto new hardware.** After Pawsitter-account sign-in, a recovery code and alerts to every owner, the new machine re-binds the **same install id and name** with a new TLS key. Passkeys, Home Screen apps and printed cards keep working. A home core can also reclaim its own name by proving its long-term key. A standalone install restores from its own backup with the recovery kit, and keeps its address if the owner moves that name to the new machine.
 - **Readiness shows** the age of the last backup and of the last test restore.
-- **Key custody.** The key that unwraps the secret keys is protected by the platform where it can be: the System keychain on macOS, DPAPI or a TPM-backed key on Windows. On a NAS or Linux, the key is split: one share on disk, the other released by the hub over the Home Link only to the paired install. A stolen box that has been unpaired can't decrypt the door codes. The unwrapped key stays in memory while running, and a wrapped copy goes in the recovery kit. So a NAS or Linux install that restarts without internet can't reveal secrets until the Home Link returns; staged door codes (§8.10) cover that gap.
+- **Key custody.** The key that unwraps the secret keys is protected by the platform where it can be: the System keychain on macOS, DPAPI or a TPM-backed key on Windows. On a NAS or Linux, the key is split: one share on disk, the other released by the hub over the Home Link only to the paired install (standalone: a passphrase or a key file, §8.15). A stolen box that has been unpaired can't decrypt the door codes. The unwrapped key stays in memory while running, and a wrapped copy goes in the recovery kit. So a NAS or Linux install that restarts without internet can't reveal secrets until the Home Link returns; staged door codes (§8.10) cover that gap.
 - **Owners recovering away from home.** A couple traveling together can lose both phones in one bag. So:
   - **Remote recovery:** recovery codes can be kept in a password manager as well as on paper. A Pawsitter-account sign-in plus a recovery code, followed by a 24-hour delay with alerts to the other owners, admits a new device.
   - **A trip approver:** each trip can name one, such as a family member or the backup contact, who can approve the trip's joins, reset PINs and reset locked invites.
@@ -320,7 +327,7 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
 ## 8.13 Co-owners and account safety
 
 - **Who controls the host.** Whoever administers the host can read its disk. Setup and owner settings say where the data lives and who controls it.
-- **A tamper-evident log off the box.** Security events (sign-ins, console use, exports, unpairing, key access) are mirrored as metadata to a log every owner can see, together with the head of a hash chain over revisions, so tampering on the box is detectable.
+- **A tamper-evident log off the box.** Security events (sign-ins, console use, exports, unpairing, key access) are mirrored as metadata to a log every owner can see, together with the head of a hash chain over revisions, so tampering on the box is detectable. Standalone installs send them to a private Discord channel or the owner's email instead (§8.15).
 - **Removing an owner.** Removing the last other owner takes effect only after a notice period, and the removed owner gets an export.
 - **Every owner of a connected install has a Pawsitter account,** so every owner gets alerts and can lock remote access.
 - **Account takeover.**
@@ -349,9 +356,58 @@ In the cloud, a power cut at the house changes nothing. At home, a dark house wo
 
 The full inventory is published, and setup says plainly that SMS and email content passes through Pawsitter and its providers.
 
-**If the companion services end**, a documented exit applies: bring your own domain, DNS and tunnel. Without one, owners keep the console on the host itself; there's still no plain-HTTP mode for sitters (§8.4). Stopping Plus never removes the free companion services ([00 §0.7](00-product-offering.md#07-packaging-proposal)).
+**If the companion services end**, every install can switch to standalone mode (§8.15). Stopping Plus never removes the free companion services ([00 §0.7](00-product-offering.md#07-packaging-proposal)).
 
-## 8.15 Moving between editions
+## 8.15 Standalone mode
+
+Decided (2026-11-07): a home install can also run **without Pawsitter's services**. It then uses only what the owner sets up: their own network, and accounts they hold with services such as Tailscale or Discord. Pawsitter holds nothing about the household, not even an owner's account. The install's only contact with Pawsitter is an anonymous check for updates, which the owner can turn off.
+
+Everything that doesn't need a companion service works as on a connected install: the kernel and dose safety, the care thread, joins and sign-in, staged door codes and the offline copy. For each companion service, the install uses what the owner set up in its place, or goes without, and setup and readiness say which. Setup asks whether to connect the install or run it standalone; switching later is in §8.16.
+
+| Companion service | Standalone, it uses | What's missing |
+|---|---|---|
+| Relay, DNS and certificates | At least one way in that the owner sets up (below) | With none, phones can't open the install: only the console on the host and the Discord bot work |
+| Join routes | QR codes and links that point straight at the install's own address | Passkeys and printed cards stop working if that address changes |
+| Push relay | Web push, sent straight from home, and notifications from the owner's Discord bot | Taken / Snooze / Skip on the iOS lock screen. On iPhone, web push needs the Home Screen web app |
+| Messaging bridge | The owner's Discord bot (below); email through the owner's own account; SMS only through the owner's own provider, which in the US needs carrier registration (A2P 10DLC or toll-free verification) | Texts to sitters who don't use Discord, unless the owner brings an SMS provider |
+| Model proxy | A local model, or the owner's own AI provider key | The hosted assistant (Plus) |
+| Watchdog and backup reminders | Heartbeats to a monitor the owner chooses, such as a Healthchecks.io check or Uptime Kuma on a machine outside the house, which alerts them its own way | Reminders from outside while the house is dark (below) |
+| Update feed | The public release feed, checked anonymously, or updates by hand. Releases are signed either way | Prompt security fixes and time-zone data, if the feed is off. Readiness shows how old the software and time-zone data are |
+| Off-site backup | Encrypted backups to a target the owner sets up: another disk, a NAS share, an S3-compatible bucket, or a machine on their tailnet | Nothing, once a target is set |
+| Security log mirror | Security events sent to a private Discord channel or the owner's email, as the copy off the box | Tamper evidence, if neither is set |
+| Pawsitter ID | Accounts local to the install | Remote recovery through a Pawsitter account; owners recover with the printed kit |
+| Home Link hub | On a NAS or Linux host, a passphrase typed at the console after a restart, or a key file on a USB stick, as the second key share. If the owner chooses, offline-copy leases as long as the trip, since nothing outside can renew them | Door-code reveals after an unattended restart until the owner unlocks, though staged codes still work. A longer lease keeps a revoked device's copy readable longer |
+
+**Ways in.** HTTPS is still required (§8.4). The owner sets up at least one:
+- **Tailscale, for the household's own devices.** Owners and family run Tailscale. The install gets a `<machine>.<tailnet>.ts.net` name with a Let's Encrypt certificate, so passkeys, the offline copy and web push all work. A sitter would have to install Tailscale too.
+- **Tailscale Funnel, for sitters.** It publishes the install's HTTPS name on the internet, so sitters need nothing installed. Tailscale's relays pass the traffic through without decrypting it, and TLS still ends on the home machine. Funnel is on every Tailscale plan.
+- **The owner's own domain.** The install gets certificates through the owner's DNS provider, so the key stays at home. It's reached on the home network through a local DNS record, by port forwarding, or through a tunnel. A tunnel such as Cloudflare's decrypts traffic at its edge, so Cloudflare can see what passes through.
+- Whichever way is used, the install's name is published in Certificate Transparency logs, so setup suggests one that doesn't identify the household. Requests through Tailscale, Funnel or a tunnel are recorded as transport `tunnel` and, like relayed ones, never raise trust.
+- **A house with no internet at all** could use a private certificate authority that the owner installs by hand on each household device (later). Sitters can't reasonably do that, so they use the printed care sheet.
+
+**Discord as the messaging channel.**
+- The owner creates a bot in Discord's developer portal and enters its token in setup. The token stays on the install.
+- The bot connects out to Discord and receives button presses over that same connection, so it needs no open port, tunnel or public address.
+- The household gets a private Discord server. A sitter joins it with an invite for the trip and links their Discord account with a one-time code ([02 §2.17](02-domain-model.md#217-care-threads--channels)). They then get reminders and alerts as direct messages with Taken / Snooze / Skip buttons, and the trip's care thread runs there too. Replies follow the same rules as SMS replies (§8.9).
+- A bot can message only people who share a server with it and accept messages from its members. For anyone else, it posts in a private channel for the trip.
+- When the trip ends, the bot removes the sitter from the server.
+- Discord can read these messages, so discreet mode is on by default: a reminder says "Sonic's 8 pm dose, item 2 on the care sheet" rather than naming the medication, unless the owner allows names.
+- With Discord and no way in, a sitter still gets reminders, answers them and can ask questions in the care thread; the printed care sheet covers the rest.
+
+**Outages.** Nothing outside the house can take over reminders, so:
+- The sitter adds the trip's dose times to their phone as alarms, from a calendar file or from a list to set by hand. The times come from the kernel, and a changed dose time sends a new file. An alarm can't tell whether a dose was given, so when one goes off, the sitter checks the offline copy or the care sheet's dose grid first.
+- The offline copy, the printed care sheet and the staged door codes work as on a connected install, within the copy's lease.
+- An outside monitor, if set up, tells the owner when the house goes quiet.
+- Readiness says plainly what isn't covered. A medication trip isn't "ready" until the sitter has added the dose alarms, or the owner accepts the gap after a warning.
+
+**Sign-in and joins.**
+- The join check is owner approval, or a code sent through the owner's email account or SMS provider, or by Discord to a sitter already in the household's server.
+- Approval requests reach owners by web push, Discord or email.
+- New owner devices need a passkey, confirmation on one of that owner's signed-in devices, or a recovery code. There's no Pawsitter-account sign-in.
+
+When standalone mode ships and what it costs are open (Q33, Q34).
+
+## 8.16 Moving between editions
 
 Moving a household between cloud and home comes later (phase 4), but these rules are fixed now so it stays possible:
 - **Identity.** User ids are UUIDv7 that Pawsitter ID can adopt unchanged, and revisions reference user ids, never passkey-specific handles.
@@ -361,7 +417,9 @@ Moving a household between cloud and home comes later (phase 4), but these rules
   - The old address stays up for 30 to 90 days as a tombstone: it accepts and forwards queued facts and redirects everything else.
   - Each person gets a re-enrollment link, and printed cards keep working through the join domain.
 
-## 8.16 Packaging and operations at home
+**Switching a home install between connected and standalone** keeps its data, and can happen between trips. The install's address changes, so passkeys, paired devices and printed cards are set up again.
+
+## 8.17 Packaging and operations at home
 
 - **Runtime.** Node 26 LTS in production for both editions: Active LTS since 2026-10-28, with end of life on 2029-04-30. The official Node binary ships inside each signed package with the app bundle. Single-file executables are deferred: Node's isn't finished and skips Intel Macs, and Bun's are large and need extra flags. Bun 1.4 stays compatible in CI. The kernel runs in worker threads with resource limits ([07 §7.9](07-portable-core.md#79-host-adapters)).
 - **Platforms:**
@@ -370,8 +428,8 @@ Moving a household between cloud and home comes later (phase 4), but these rules
   - **NAS, Linux, Raspberry Pi:** a multi-arch container image (amd64 and arm64) with a `/data` volume, a healthcheck, and compose and Unraid templates. An admin command, run with `docker exec`, handles recovery, invite QRs and claiming. The host's LAN address comes from configuration, because inside a container the server sees its own internal address.
   - **The tray app** (Tauri, at GA): status, join QRs, approvals, updates, power.
 - **The port.** A fixed default that avoids common ones (3000, 5000/5001, 8080, 8123, 32400 and others), with a fallback to the next free port.
-- **Support.** A consented diagnostics bundle goes over the Home Link: versions, heartbeats, certificate and backup state, error codes, and no household data. Owners and support also get a per-install health page.
-- **Abuse.** Every install is a TLS endpoint with a valid certificate that Pawsitter can't inspect. So:
+- **Support.** A consented diagnostics bundle goes over the Home Link: versions, heartbeats, certificate and backup state, error codes, and no household data. Owners and support also get a per-install health page. Standalone owners can save the bundle and send it themselves.
+- **Abuse.** Every connected install is a TLS endpoint with a valid certificate that Pawsitter can't inspect. So:
   - per-install bandwidth and connection quotas by plan;
   - per-install send limits at the push relay and the messaging bridge; the bridge is the metering authority for SMS from home installs, as the model proxy is for AI ([03 §3.10.3](03-core-architecture.md#3103-who-pays));
   - detection of unusual traffic;
@@ -380,17 +438,17 @@ Moving a household between cloud and home comes later (phase 4), but these rules
   - monitoring of the zone's standing with Safe Browsing and filter lists, and a runbook for when it's flagged: suspend the offending install at the relay, request delisting, and tell affected owners.
 - **Uninstalling.** Export, destroy the keys, unpair, clean up DNS, and notify members and sitters.
 
-## 8.17 Phasing
+## 8.18 Phasing
 
 | Phase | Scope |
 |---|---|
-| **0. Foundations** (now) | **Build:** the monorepo, kernel, core and ports; both stores behind one contract; the test kit running both compositions; sign-in (devices, grants, joins, passkeys, codes, step-up).<br>**Long-lead items:** settle the name (Q20); register the home zone; apply for the Public Suffix List on isolation grounds; request a Let's Encrypt rate-limit override; set up a backup CA.<br>**Fix now:** the identity rules for moving between editions (§8.15). |
+| **0. Foundations** (now) | **Build:** the monorepo, kernel, core and ports; both stores behind one contract; the test kit running both compositions; sign-in (devices, grants, joins, passkeys, codes, step-up).<br>**Long-lead items:** settle the name (Q20); register the home zone; apply for the Public Suffix List on isolation grounds; request a Let's Encrypt rate-limit override; set up a backup CA.<br>**Fix now:** the identity rules for moving between editions (§8.16). |
 | **1. Cloud MVP** | The spec's MVP, plus:<br>- sitters as global users with per-account device grants;<br>- sent, displayed and printed QR joins with a second factor bound to the browser;<br>- linked devices and the security log;<br>- passkeys, the offline copy and web push;<br>- two-way SMS with number pools;<br>- the iOS shell and Android TWA, if they're in the MVP (Q32). |
 | **2. Home beta** (internet required) | **Hosts:** the container image and an always-on Mac only, with one sign-in preset.<br>**Services:** the Home Link, relay, DNS and certificates; the push relay, bridge, model proxy and watchdog.<br>**Outage and recovery:** backup reminders and staged door codes; encrypted off-site backup and restore; owners' Pawsitter-account sign-in and remote recovery.<br>**Updates:** signed code and data updates.<br>**Testing:** the same end-to-end suite; passkey tests on real devices with real certificates; outage drills on each beta host (power cut, ISP outage, sleep and wake, a router or DHCP change, a Raspberry Pi without a battery-backed clock, a host on a VPN) that check catch-up, backup reminders, staged door codes and clock trust; and the relay's TLS termination, `node:sqlite` and the power helper re-run on Node 26, since research ran them only on Node 22.23.4 and Bun 1.4.4.<br>**Zone:** a separate, invite-only one. |
-| **3. Home GA** | Windows; the tray app; the desktop LAN shortcut; the kiosk; Pawsitter-account sign-in for family and sitters; local models and the owner's own model key; CT monitoring for owners; the production zone once the Public Suffix List entry has shipped. |
-| **4. Later** | Moving households between editions; WhatsApp and Discord (V2); a split-DNS guide; a single-file runtime. |
+| **3. Home GA** | Windows; the tray app; the desktop LAN shortcut; the kiosk; Pawsitter-account sign-in for family and sitters; local models and the owner's own model key; CT monitoring for owners; the production zone once the Public Suffix List entry has shipped; standalone mode, with Tailscale and the owner's own domain, the owner's Discord bot and email, their own backup target and an outside monitor (Q33). |
+| **4. Later** | Moving households between editions; WhatsApp, and Pawsitter's own Discord bot for cloud and connected installs (V2); for standalone installs, the owner's own SMS provider, Telegram and Matrix bots, and a private certificate authority; a split-DNS guide; a single-file runtime. |
 
-## 8.18 Open decisions and hypotheses
+## 8.19 Open decisions and hypotheses
 
 **For the owner to decide** (in [05](05-open-questions.md)):
 - **Q27:** home relay-first.
@@ -399,6 +457,8 @@ Moving a household between cloud and home comes later (phase 4), but these rules
 - **Q30:** the home-zone domain.
 - **Q31:** home pricing.
 - **Q32:** whether the iOS shell is in the cloud MVP.
+- **Q33:** what standalone mode ships first, and when.
+- **Q34:** what standalone mode costs.
 
 **Adopted as defaults, open to revisit:**
 - a LaunchDaemon on macOS;
@@ -419,6 +479,9 @@ Moving a household between cloud and home comes later (phase 4), but these rules
 - how common router rebinding filters are, and guest-network isolation by router brand;
 - WhatsApp webhook rules;
 - whether phones leave a Wi-Fi network that has no internet;
-- Chrome possibly gating top-level navigations to local addresses.
+- Chrome possibly gating top-level navigations to local addresses;
+- whether phones keep the alarms in an imported calendar file (iOS Calendar, Google Calendar);
+- how reliably Discord's app delivers notifications, and its limits on bots messaging people;
+- Tailscale Funnel's bandwidth and connection limits, for photo updates.
 
 Until each is confirmed, its worst-case fallback applies. For example, assume a per-install TWA can't verify its asset links, and send its push through the relay.

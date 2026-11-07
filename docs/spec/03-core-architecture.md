@@ -40,7 +40,7 @@ CallerContext {
   actor: Actor            # user / system / integration, + device and on_behalf_of
   interface: "web" | "mobile" | "api" | "assistant" | "mcp" | "sms" | "whatsapp" | "discord" | ...
   egress_tier: "normal" | "private"   # the most sensitive data this interface may receive
-  transport: "loopback" | "lan" | "relay" | "cloud"   # how the request arrived; recorded, never raises trust
+  transport: "loopback" | "lan" | "relay" | "tunnel" | "cloud"   # how the request arrived; recorded, never raises trust
   device_id, auth_strength   # the device grant and how it was established (passkey, code, approval, PIN)
   now: Instant            # from the Clock port at the edge, so a request is evaluated at one instant
   locale, request_id
@@ -133,7 +133,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `EngagementLifecycle` | Send the owner the readiness check a day before a trip; open/close caregiver access at window edges and at "I'm home"; activate engagement-only routines; end caregiver device grants, leaving them limited for 7 days to late uploads and reads of the sitter's own events and the stay summary ([08 §8.8](08-home-and-cloud.md#88-revocation-ending-and-late-doses)). |
 | `SessionSweeper`, `JoinWindowRotator`, `PushSubscriptionSweeper` | Expire sessions and grants; rotate the nonce of open join windows every 30 seconds; delete push subscriptions the push service reports gone. |
 | `ReminderCatchUp` (home) | On every start, wake or Home Link reconnect, apply the replies queued at the bridge, then take back reminders still open: fire those the bridge never sent, marked late, and continue the rest ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
-| `CertificateRenewal`, `LinkHeartbeat`, `Backup`, `UpdateCheck` (home) | Renew the install's certificate through ACME Renewal Information and at startup; keep the Home Link alive and report heartbeats; take snapshots daily and before migrations, and the encrypted off-site backup; apply signed code and data updates ([08 §8.4](08-home-and-cloud.md#84-https-for-home-installs), [§8.11](08-home-and-cloud.md#811-updates-and-data-at-home), [§8.12](08-home-and-cloud.md#812-backups-keys-and-recovery-at-home)). |
+| `CertificateRenewal`, `LinkHeartbeat`, `Backup`, `UpdateCheck` (home) | Renew the install's certificate through ACME Renewal Information and at startup; keep the Home Link alive and report heartbeats (standalone: to the owner's monitor); take snapshots daily and before migrations, and the encrypted off-site backup; apply signed code and data updates ([08 §8.4](08-home-and-cloud.md#84-https-for-home-installs), [§8.11](08-home-and-cloud.md#811-updates-and-data-at-home), [§8.12](08-home-and-cloud.md#812-backups-keys-and-recovery-at-home)). |
 | `ReportBuilder` | Assemble visit, daily and stay reports from events, and push them to the owner. |
 | `ImportDrafting` | Turn a pasted care note into drafts (§3.8.1). |
 | `LowStockCheck` | Raise `stock.low` and fill the shopping list. |
@@ -249,7 +249,7 @@ Decided (Q2): **cloud first, with the location of each part configurable.** Two 
 | Language model, vision | `LanguageModel`, `Vision` ports | MVP (hosted, `normal` data only) | V2, via an edge node; may see `private` data |
 | Media files | `BlobStore` port | MVP | V2, via an edge node, e.g. to keep prescription-label photos at home |
 | Secret encryption keys | `Crypto` port | MVP (cloud KMS) | V2, via an edge node: the cloud stores ciphertext it can't decrypt |
-| Notifications | `Notifier` port | MVP | Home edition: web push sent directly from home; native push through Pawsitter's push relay; SMS and email through the cloud messaging bridge ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)) |
+| Notifications | `Notifier` port | MVP | Home edition: web push sent directly from home; native push through Pawsitter's push relay; SMS and email through the cloud messaging bridge ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)). Standalone installs use web push, the owner's Discord bot, and email or SMS through the owner's own accounts ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)) |
 | Sign-in | `Identity` port | MVP | Home edition: the home core is the identity provider ([08 §8.5](08-home-and-cloud.md#85-identity-and-sign-in)) |
 | Web app, mobile/PWA | public API | ✓ | ✓ |
 | AI assistant, MCP server, chat bots | public API | ✓ | ✓, each with its own credential (§3.2) |
@@ -315,7 +315,7 @@ So that moving a part later is configuration, not a rewrite:
 |---|---|---|---|
 | Cloud | MVP | Cloud (Postgres, S3, KMS) | Hosted model on `normal` data. Interfaces can run anywhere. |
 | Cloud + edge node | V2 | Cloud | The owner's hardware runs a local model and vision, and keeps private media and chosen secret keys. |
-| Home edition | V2 (beta, then GA) | Owner's hardware (SQLite, local disk) | Reached through Pawsitter's relay at its own HTTPS name; companion services for push, messaging, AI, backups and updates ([08](08-home-and-cloud.md)). |
+| Home edition | V2 (beta, then GA) | Owner's hardware (SQLite, local disk) | Connected: reached through Pawsitter's relay at its own HTTPS name, with companion services for push, messaging, AI, backups and updates. Standalone: no Pawsitter services, only what the owner sets up ([08](08-home-and-cloud.md)). |
 | Hybrid sync | Later | Replicated between home and cloud through the event log | Only if there's real demand; the most complex shape. It would replace the one-data-home rule (02 invariant 27). |
 
 ## 3.10 AI usage metering

@@ -135,7 +135,7 @@ erDiagram
 | `default_site_id?` | Site | |
 | `plan_id`, `billing_anchor` | Plan, instant | The plan version, and when billing periods start (see 2.14). |
 | `settings` | object | Feature flags, retention, the capability routing table ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)), and for home installs the sign-in policy ([08 §8.6](08-home-and-cloud.md#86-home-sign-in-options)). |
-| `data_home` | string | `cloud` or `install:<install_id>`: exactly one. Moving is export, import and cutover, never writing to both ([08 §8.15](08-home-and-cloud.md#815-moving-between-editions)). |
+| `data_home` | string | `cloud` or `install:<install_id>`: exactly one. Moving is export, import and cutover, never writing to both ([08 §8.16](08-home-and-cloud.md#816-moving-between-editions)). |
 
 **`Membership`**: `(user_id, account_id)` unique.
 
@@ -174,7 +174,7 @@ erDiagram
 
 **`PasskeyCredential`**: `user_id`, `rp_id` (the cloud domain or a home install's name), credential id, public key, sign count, `last_used_at`, `revoked_at?`. **`PersonPin`** (home): a slow salted hash bound to one device, with a lockout counter. **`OwnerRecoveryKit`**: hashed one-time recovery codes per owner. **`SecurityEvent`**: sign-ins, joins, approvals, step-ups, reveals, revocations and remote locks. Owners can see them, they're kept at least 1 year, and home installs mirror them off the box ([08 §8.13](08-home-and-cloud.md#813-co-owners-and-account-safety)).
 
-**`Installation`** (home only, one per install): `install_id`, hostname label, certificate fingerprints and expiry, Home Link key id, enabled companion features, schema version, LAN paths, last heartbeat. For a home account, the cloud keeps only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees), and no care records except the discreet backup reminder schedule ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)).
+**`Installation`** (home only, one per install): `install_id`, `mode` (`connected` · `standalone`), hostname label or the owner's own name, certificate fingerprints and expiry, Home Link key id (connected only), enabled companion features or the owner's own services in their place, schema version, LAN paths, last heartbeat. For a connected install, the cloud keeps only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees), and no care records except the discreet backup reminder schedule ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). For a standalone install it keeps nothing ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)).
 
 **`Engagement`**: a care job that grants time-boxed access.
 
@@ -711,7 +711,7 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 24. A device grant covers exactly one account. A caregiver's grant ends no later than the trip's access end; after that, for 7 days, the device can upload only doses, completions and reveal logs dated inside the access window, and read only the sitter's own events and the stay summary.
 25. Queued facts (doses, task completions) are never discarded because a grant ended or a request was refused.
 26. Transport never raises trust, and relayed traffic is never treated as local.
-27. An account has exactly one data home. For a home account, the cloud holds only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees).
+27. An account has exactly one data home. For a connected home account, the cloud holds only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees); for a standalone one, nothing.
 
 ## 2.19 Mapping from the prototype
 

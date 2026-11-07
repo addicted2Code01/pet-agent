@@ -116,6 +116,8 @@ From the home and cloud design ([08](08-home-and-cloud.md)).
 
 *Recommendation:* relay-first. Accept that remote access, push, SMS and certificates need the internet, and cover outages with Q29's fallbacks rather than a plain-HTTP mode.
 
+*Decided in part (2026-11-07):* home installs can also run standalone, without Pawsitter's services ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)). For connected installs, the recommendation stays relay-first.
+
 **Q28. Which home sign-in options, and which defaults?** The menu is in [08 §8.6](08-home-and-cloud.md#86-home-sign-in-options): paired devices, passkeys, a code to the contact the owner entered, owner approval, a personal PIN, a Pawsitter account, the console, a kiosk, trusted home Wi-Fi, and a shared household PIN.
 
 *Recommendation:*
@@ -131,25 +133,42 @@ From the home and cloud design ([08](08-home-and-cloud.md)).
 - **Door codes staged on the sitter's phone** for the access window, after a step-up.
 - **A readiness gate:** no home trip is "ready" while a door code the sitter needs can't be staged and has no stated fallback, and a medication trip also needs backup reminders.
 
+Standalone installs have no backup reminders from the cloud. Dose alarms on the sitter's phone take their place ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)).
+
 **Q30. The home-zone domain.** Every home install's name lives under it, so passkeys and printed cards depend on it never changing.
 
 *Recommendation:* after the product name (Q20), register a separate domain for long-term use and apply for the Public Suffix List. Run the beta on a separate, invite-only zone until the listing ships in browsers. The PSL has no service-level agreement and may decline the entry, so homes may stay on the invite-only zone beyond the beta.
 
-**Q31. What's free in the home edition?**
+**Q31. What's free in a connected home install?**
 
 *Recommendation:*
 - **Free:** sitter access through the relay; reminders, push and the watchdog; backup reminders; staged door codes; encrypted off-site backup of the structured data. This keeps the promise that sharing is free and safety isn't paywalled.
 - **Plus:** relay bandwidth above a cap, media backup, and the hosted assistant.
 
+Standalone installs are Q34.
+
 **Q32. Is the native iOS owner app in the cloud MVP?** It's the only way to get Taken / Snooze / Skip on the lock screen, and time-sensitive reminders, on Apple devices. For home installs, iOS limits on per-install web addresses in an app still need testing ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)).
 
 *Recommendation:* yes, for the cloud MVP. Test per-install addresses on real devices before the home beta, with Pawsitter-account sign-in as the fallback.
 
+**Q33. What ships first in standalone mode, and when?** Every companion service has a do-it-yourself replacement ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)), but each is more to build, test and support.
+
+*Recommendation:* ship it at home GA with:
+- ways in: Tailscale, Tailscale Funnel and the owner's own domain;
+- messaging: web push, the owner's Discord bot and email;
+- backups to a disk, a NAS share or an S3-compatible bucket, and heartbeats to an outside monitor.
+
+Add the owner's own SMS provider, Telegram and Matrix bots, and a private certificate authority for houses with no internet later, as owners ask for them.
+
+**Q34. What does standalone mode cost?** It uses no Pawsitter services, so it costs Pawsitter nothing to run, but there's also nothing to meter.
+
+*Recommendation:* free. Connected installs and Plus stay the paid path, and a free standalone mode builds trust with households that want their data at home. Revisit if support costs grow.
+
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; and Q27 to Q29 and Q31 before the home beta.
-3. Start the long-lead items for the home edition now ([08 §8.17](08-home-and-cloud.md#817-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
+2. Decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
+3. Start the long-lead items for the home edition now ([08 §8.18](08-home-and-cloud.md#818-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
 4. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 5. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, and the reminder dispatcher (repeat, escalate, supersede).
 6. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.

@@ -163,10 +163,11 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Per-account capability routing: which provider serves the model, vision, media and keys, by data sensitivity | MVP | Cloud providers only at first; see [03 §3.9](03-core-architecture.md#39-deployment-and-placement). |
 | Edge node: run the model and vision, and keep private media and chosen secret keys, on the owner's own hardware | V2 | Dials out to the cloud; no port forwarding. |
 | Engagement readiness check: warn the owner if something a sitter needs is missing or offline | MVP | Part of trip setup (1.1). Checks for home-held keys arrive with the edge node (V2). |
-| **Home edition**: the core and household data on the owner's always-on Mac, Windows PC or NAS, reached through Pawsitter's relay at its own HTTPS name | V2 | The beta covers the container image and macOS; GA adds Windows and the tray app ([08](08-home-and-cloud.md)). The original prototype's local-first story. |
-| Companion services for home installs: relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates | V2 | They hold operational records such as routing data and ciphertext, not care records, except a discreet backup reminder schedule ([08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees)). |
+| **Home edition**: the core and household data on the owner's always-on Mac, Windows PC or NAS, reached through Pawsitter's relay at its own HTTPS name, or standalone (below) | V2 | The beta covers the container image and macOS; GA adds Windows and the tray app ([08](08-home-and-cloud.md)). The original prototype's local-first story. |
+| Companion services for connected home installs: relay, DNS and certificates, push relay, messaging bridge, model proxy, watchdog, updates | V2 | They hold operational records such as routing data and ciphertext, not care records, except a discreet backup reminder schedule ([08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees)). |
 | Home outage fallbacks: backup reminders from the cloud and door codes staged on the sitter's phone | V2 | A home trip isn't "ready" until each door code a sitter needs can be staged or has a stated fallback; a medication trip also needs backup reminders ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
 | Home backups: encrypted off-site backup of the structured data, and restore onto new hardware under the same name | V2 | Free ([08 §8.12](08-home-and-cloud.md#812-backups-keys-and-recovery-at-home)). |
+| **Standalone mode** for home installs: no Pawsitter services; uses what the owner sets up, such as Tailscale or their own domain to reach the install, a Discord bot and email for notifications, and their own backup target | V2 | Decided 2026-11-07. What replaces each companion service, and what's missing: [08 §8.15](08-home-and-cloud.md#815-standalone-mode). Timing Q33, price Q34. |
 | Billing and plans: Free and Plus | V2 | Proposal in [00 §0.7](00-product-offering.md#07-packaging-proposal). AI allotments ship in MVP regardless; see 1.11. |
 
 ## 1.11 AI usage & allotments
@@ -184,7 +185,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Paid plans and credit top-ups | V2 | Arrives with billing. |
 | Reconciliation against providers' usage reports | V2 | |
 | Paid overage | Later | Opt-in only; no surprise bills. |
-| Bring your own provider key | Later | Recorded, not billable. Home installs get it at home GA ([08 §8.17](08-home-and-cloud.md#817-phasing)). |
+| Bring your own provider key | Later | Recorded, not billable. Home installs get it at home GA ([08 §8.18](08-home-and-cloud.md#818-phasing)). |
 
 ## 1.12 Setup & onboarding
 
