@@ -27,6 +27,7 @@ Most of the product is core logic that's built whatever we choose here: records,
 | AI | Care-note import, the assistant, reports | Yes (hero features) | Decided: pluggable, hosted by default (Q3); §9.7 |
 | Remote access to a home install | The home edition | No | Open (Q27); §9.5 |
 | Packaging a home install | The home edition | No | Open (Q37); §9.6 |
+| Door access and home devices | Door codes that end with the trip, proof of care from devices, Siri | No | Later (decided 2026-11-07); §9.8 |
 | Backups and updates | Trust and safety | Cloud only | Cloud is ours to run; home in [08](08-home-and-cloud.md) |
 | Billing | The Plus plan | No | V2 ([01 §1.10](01-features.md#110-platform)) |
 
@@ -150,7 +151,28 @@ V1 is cloud only, so it doesn't need this. It decides how the home edition (V2) 
 | The owner's own provider key | Low | Billed to the owner | No allotment needed | Support across providers | Later |
 | No AI | None | None | Every safety feature still works (principle 2) | No import, assistant or written reports | The fallback when the allotment runs out |
 
-## 9.8 Candidate V1 shapes
+## 9.8 Door access and home devices
+
+Connecting to the house's smart locks and devices. It's a Later feature, after V2 (decided 2026-11-07), and nothing earlier depends on it.
+
+**Why door codes are the prize.** Today the sitter reveals the household's own door code, and the owner is prompted to change it after the trip ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). With a smart lock, the sitter can get a code of their own that works only during the trip. The lock logs each use, and there's nothing to change afterwards. That's the strongest form of "access that ends when you're home" ([00 §0.3](00-product-offering.md#03-why-it-wins)). The records already allow it: a door code can be a stored secret or a code a lock issued ([02 §2.10](02-domain-model.md#210-knowledge-secrets--contacts)).
+
+| Option | Owner does | Our effort | Gets | Weak at | Verdict |
+|---|---|---|---|---|---|
+| A lock service such as Seam, for cloud accounts | Links their lock account once | Medium: one integration covers many brands | Codes with start and end times, created and deleted with the trip, on August, Yale, Schlage, Kwikset, Nuki and others | A paid service in the middle, with no public prices; the lock maker's cloud has to be up | Later |
+| Matter, run by a home install | Adds the lock to the home install | Medium to high: a Matter controller | Local control that works standalone; PIN codes and date-range schedules are part of the standard | Those parts are optional, and many locks don't support managing codes over Matter | Later |
+| Apple Home guest access | Creates the sitter's code in the Home app | Low: a guided step, and a reminder in readiness | Scheduled guest codes since iOS 18, with a home hub | Apple-only; schedules need a Matter lock that supports them; no API found that lets an app create or check the codes | Later |
+| Apple's home hub screen and Siri | Uses the iOS app | Medium: widgets and Siri actions in the iOS app | Today's tasks on the kitchen screen; "Did anyone feed Sonic?" | Needs the native iOS app; Apple hasn't confirmed what other apps can do on the hub | Later |
+| Pet devices: feeders, fountains, litter boxes, door sensors, cameras | Connects them through Home Assistant | Medium per kind of device | Automatic proof that care happened | Most aren't in Apple Home; cameras raise privacy questions | Later |
+
+**Notes.**
+- **An Apple home hub can't host Pawsitter.** Apple TV and HomePod run Apple Home automations and keep accessories reachable while the owner is away. They don't run other companies' servers, and HomePod runs no other apps at all. Apple's hub with a screen is reported for late 2026, with other apps limited to widgets and Siri actions; that's still rumor. ([MacRumors](https://www.macrumors.com/2026/08/25/apple-smart-home-display-still-coming/), [MacRumors guide](https://www.macrumors.com/guide/apple-command-center/))
+- **Apple Home guest access:** since iOS 18, owners can give a guest scheduled access to locks, garage doors and alarms, including PIN codes. Schedules need a Matter lock that supports them, and a home hub is required. ([T3](https://www.t3.com/news/ios-18-introduces-guest-access-to-the-home-app-and-its-ideal-for-airbnb-owners), [9to5Mac](https://9to5mac.com/2024/06/11/ios-18-homekit-features-apple-smart-home/))
+- **Apps can control Matter accessories in Apple Home,** but Apple's developer pages mention no way for an app to manage lock codes. ([Apple](https://developer.apple.com/apple-home/matter))
+- **Matter's lock definition includes PIN codes and weekly and date-range schedules,** all optional. Home Assistant already sets and clears lock codes over Matter. Owners report locks that don't support code management over Matter. ([Door Lock cluster](https://www.matteralpha.com/cluster/door-lock?page=2), [Home Assistant](https://www.home-assistant.io/actions/matter.set_lock_credential/), [Homey forum](https://community.homey.app/t/pin-support-in-matter/145909))
+- **Seam** creates codes that are active between a start and an end time, and can load them onto the lock ahead of time. ([Seam](https://docs.seam.co/latest/core-concepts/access-codes))
+
+## 9.9 Candidate V1 shapes
 
 Each shape keeps every safety feature. They differ in how people are reached, and how much we build before the first households use it.
 
@@ -193,10 +215,11 @@ Each shape keeps every safety feature. They differ in how people are reached, an
 
 These shapes are about delivery. The MVP feature list in [01](01-features.md) is large too, and a separate pass can cut it to a V1 core.
 
-## 9.9 Decisions this document feeds
+## 9.10 Decisions this document feeds
 
-- **Q36: the V1 shape** (§9.8). Everything else follows from it.
+- **Q36: the V1 shape** (§9.9). Everything else follows from it.
 - **Q32:** whether the iOS shell is in V1 (§9.4).
 - **Q24:** confirm SMS for V1, and RCS as the fast follow (§9.3).
 - **Q27:** remote access for home installs (§9.5).
 - **Q37:** how the home edition ships first, and whether we ever sell a box (§9.6).
+- **Door access and home devices** are Later (2026-11-07). Which route comes first is decided then (§9.8).

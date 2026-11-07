@@ -174,7 +174,7 @@ Add the owner's own SMS provider, Telegram and Matrix bots, and a private certif
 
 From the capabilities and delivery options ([09](09-capabilities-and-options.md)).
 
-**Q36. What shape is V1?** The candidates are in [09 §9.8](09-capabilities-and-options.md#98-candidate-v1-shapes): A, cloud and web first; B, A plus thin native shells; C, home first.
+**Q36. What shape is V1?** The candidates are in [09 §9.9](09-capabilities-and-options.md#99-candidate-v1-shapes): A, cloud and web first; B, A plus thin native shells; C, home first.
 
 *Recommendation:* A. Add B's iOS shell as the first follow-up, or bring it into V1 if the beta shows owners need Taken / Snooze / Skip on the lock screen. Start SMS sender registration now, and add RCS as a fast follow.
 
@@ -185,7 +185,7 @@ From the capabilities and delivery options ([09](09-capabilities-and-options.md)
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q36 (the V1 shape, [09 §9.8](09-capabilities-and-options.md#98-candidate-v1-shapes)) first. Then decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions), Q26 (daylight-saving gaps) and Q35 (media types and limits), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
+2. Decide Q36 (the V1 shape, [09 §9.9](09-capabilities-and-options.md#99-candidate-v1-shapes)) first. Then decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions), Q26 (daylight-saving gaps) and Q35 (media types and limits), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
 3. Start the long-lead items now. For V1: SMS sender registration (10DLC, or toll-free verification, which needs a business tax ID) and the email domain's sender records ([09 §9.3](09-capabilities-and-options.md#93-reaching-people-and-holding-conversations)). For the home edition ([08 §8.18](08-home-and-cloud.md#818-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
 4. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 5. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, the reminder dispatcher (repeat, escalate, supersede), and `ResolveLocalTime` for times given in words. Write the assistant's test questions ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)) alongside.

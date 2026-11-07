@@ -37,6 +37,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Nested places to any depth: room → furniture → shelf → container | MVP | For example Kitchen → Pantry → Shelf 2 → Blue airtight container. The UI suggests three levels (Q5). |
 | Photos and descriptions on places ("the basket by the front door") | MVP | |
 | ★ Site access info (entry instructions, parking, alarm, lockbox) as secrets, with a photo of where the lockbox or keypad is | MVP | Every reveal is logged for the owner. 06 #13. |
+| Smart lock codes that start and end with the trip: the sitter gets their own code, created when access opens and deleted at handback | Later | Through a lock service, Matter on a home install, or Apple Home guest access ([09 §9.8](09-capabilities-and-options.md#98-door-access-and-home-devices)). |
 | Portable containers (carrier, go-bag, car kit) whose contents move with them | V2 | A container place backed by an item. |
 | Floor-plan or room map view | Later | |
 
@@ -103,6 +104,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Today view: done, due, overdue, upcoming, and **what's next** | MVP | A computed core query. 06 #9. |
 | Complete, skip (with reason) or snooze a task; attach note or photo evidence | MVP | |
 | Routines active only during an engagement or at a specific site | MVP | Different routine when boarding. |
+| Pet devices as proof of care: feeders, fountains, litter boxes and door sensors confirm a task automatically | Later | Through Home Assistant ([09 §9.8](09-capabilities-and-options.md#98-door-access-and-home-devices)). |
 | Visit checklist generated from the tasks due during a visit window | V2 | |
 
 ## 1.7 Knowledge, contacts & emergencies
@@ -148,6 +150,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | MCP server exposing core queries/commands as tools | V2 | Can run on the owner's own machine against the cloud API; adds no model cost. |
 | Chat channels for the care thread and the assistant: WhatsApp, Discord | V2 | Two-way SMS is MVP (1.14). Slack and Telegram later. Each channel gets its own privacy review. |
 | Voice (smart speaker) | Later | |
+| Siri and widgets, including on Apple's home hub screen: today's tasks, "did anyone feed Sonic?" | Later | Needs the native iOS app; Apple hasn't confirmed what other apps can do on the hub ([09 §9.8](09-capabilities-and-options.md#98-door-access-and-home-devices)). |
 
 ## 1.10 Platform
 

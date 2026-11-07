@@ -447,6 +447,7 @@ Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) b
 | `reveal_policy` | enum | `members` · `engaged_caregivers` · `owners_only` |
 | `assistant_access` | enum | `never` (default) · `on_request`: whether AI adapters may ever receive it. |
 | `needed_outside` | bool | Needed to get in, such as a door or lockbox code. For a home install, readiness checks that the owner has a fallback, or that it can be staged on the sitter's phone and is once access opens ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)). |
+| `issued_by_lock?` | `{lock_ref, valid_from, valid_until}` | For a door code a smart lock issued to one sitter for one trip (Later, [09 §9.8](09-capabilities-and-options.md#98-door-access-and-home-devices)). It's created when access opens and deleted at handback, so there's nothing to change afterwards. |
 
 **`SecretReveal`**: `{secret_id, revealed_to, actor, device_id, step_up_method, transport, at, interface}`. Every reveal is logged, and the owner can see the log.
 
