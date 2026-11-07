@@ -1,0 +1,54 @@
+{
+  "description": "History last confirmed 7 hours ago, bound 6 hours, nothing on record rules it out: can't confirm.",
+  "op": "can_administer",
+  "request": {
+    "schema_version": 1,
+    "now": 1767254400000,
+    "context": {
+      "computed_on": "device",
+      "device_id": "dev_a",
+      "last_server_time_seen": 1767229200000,
+      "history_confirmed_at": 1767229200000,
+      "freshness_bound_ms": 21600000,
+      "clock_skew_margin_ms": 120000
+    },
+    "order": {
+      "id": "ord_cerenia",
+      "status": "active",
+      "starts_at": 1764547200000,
+      "ends_at": null,
+      "not_before": null,
+      "counts_spat_out_and_vomited": true,
+      "revisions": [
+        {
+          "id": "rev_1",
+          "effective_from": 1764547200000,
+          "min_interval_ms": 28800000,
+          "max_doses": {
+            "count": 2,
+            "window_ms": 86400000
+          }
+        }
+      ]
+    },
+    "administrations": []
+  },
+  "response": {
+    "schema_version": 1,
+    "ok": true,
+    "result": {
+      "decision": "unverified",
+      "reasons": [
+        {
+          "code": "HISTORY_STALE",
+          "until": null
+        }
+      ],
+      "next_allowed_at": null,
+      "last_given_at": null,
+      "doses_in_window": 0,
+      "history_confirmed_at": 1767229200000,
+      "revision_id": "rev_1"
+    }
+  }
+}

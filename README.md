@@ -4,6 +4,11 @@ A private, local-first AI assistant that helps pet sitters follow the owner's in
 
 The sitter opens the dashboard on their phone (on the home Wi-Fi) and asks things like *"How much Ondansetron does Sonic get?"* or *"What do I need to do next?"*. Answers come from a local LLM using only the owner's own notes, with photos of the right pill bottle or pen. Nothing leaves the home network.
 
+## Productizing (in progress)
+This repository is also where the product version is being built. The Python prototype described below is unchanged.
+- The spec is in [docs/spec](docs/spec/README.md).
+- The new TypeScript core starts in [packages/kernel](packages/kernel/README.md): run `npm install`, then `npm test`.
+
 ## Features
 - **Ask anything:** chat with a local LLM that answers only from the household's information and says "I don't know, contact the owner" instead of guessing.
 - **Knows the time:** the current time, overdue and upcoming tasks and recent activity are in every prompt, so "what's next?" just works.

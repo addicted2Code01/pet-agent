@@ -1,0 +1,13 @@
+{
+  "description": "A NUL character anywhere in the request is rejected.",
+  "op": "can_administer",
+  "request_text": "{\"schema_version\":1,\"now\":\u0000}",
+  "response": {
+    "schema_version": 1,
+    "ok": false,
+    "error": {
+      "code": "INVALID_CHARACTER",
+      "path": null
+    }
+  }
+}

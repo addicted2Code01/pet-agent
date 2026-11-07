@@ -1,0 +1,15 @@
+{
+  "description": "An operation the kernel doesn't have.",
+  "op": "can_dance",
+  "request": {
+    "schema_version": 1
+  },
+  "response": {
+    "schema_version": 1,
+    "ok": false,
+    "error": {
+      "code": "UNKNOWN_OP",
+      "path": null
+    }
+  }
+}

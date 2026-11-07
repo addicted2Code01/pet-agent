@@ -1,0 +1,13 @@
+{
+  "description": "Request text that isn't JSON.",
+  "op": "can_administer",
+  "request_text": "{",
+  "response": {
+    "schema_version": 1,
+    "ok": false,
+    "error": {
+      "code": "INVALID_JSON",
+      "path": null
+    }
+  }
+}

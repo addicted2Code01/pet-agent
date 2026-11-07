@@ -1,0 +1,15 @@
+{
+  "name": "pawsitter",
+  "private": true,
+  "description": "Pawsitter monorepo. The Python hackathon prototype stays at the repository root; new code lives under packages/.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

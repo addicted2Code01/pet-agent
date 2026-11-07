@@ -1,0 +1,22 @@
+{
+  "name": "@pawsitter/kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The pure, deterministic kernel: JSON in, JSON out, the same answer on every host (docs/spec/07-portable-core.md).",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
+    "gates": "node scripts/check-artifact.mjs",
+    "corpus": "node test/run-corpus.mjs",
+    "corpus:bun": "bun test/run-corpus.mjs",
+    "test": "npm run typecheck && npm run build && npm run gates && npm run gates:selftest && npm run corpus",
+    "gates:selftest": "node test/gates-selftest.mjs"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0",
+    "acorn-walk": "8.3.5",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

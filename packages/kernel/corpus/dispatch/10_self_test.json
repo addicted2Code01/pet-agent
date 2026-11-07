@@ -1,0 +1,14 @@
+{
+  "description": "The self-test confirms strict mode is in effect.",
+  "op": "self_test",
+  "request": {
+    "schema_version": 1
+  },
+  "response": {
+    "schema_version": 1,
+    "ok": true,
+    "result": {
+      "strict_mode": true
+    }
+  }
+}

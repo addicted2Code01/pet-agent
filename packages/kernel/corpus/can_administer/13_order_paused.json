@@ -1,0 +1,54 @@
+{
+  "description": "A paused order: not yet, with no next time.",
+  "op": "can_administer",
+  "request": {
+    "schema_version": 1,
+    "now": 1767254400000,
+    "context": {
+      "computed_on": "server",
+      "device_id": null,
+      "last_server_time_seen": null,
+      "history_confirmed_at": null,
+      "freshness_bound_ms": 21600000,
+      "clock_skew_margin_ms": 120000
+    },
+    "order": {
+      "id": "ord_cerenia",
+      "status": "paused",
+      "starts_at": 1764547200000,
+      "ends_at": null,
+      "not_before": null,
+      "counts_spat_out_and_vomited": true,
+      "revisions": [
+        {
+          "id": "rev_1",
+          "effective_from": 1764547200000,
+          "min_interval_ms": 28800000,
+          "max_doses": {
+            "count": 2,
+            "window_ms": 86400000
+          }
+        }
+      ]
+    },
+    "administrations": []
+  },
+  "response": {
+    "schema_version": 1,
+    "ok": true,
+    "result": {
+      "decision": "denied",
+      "reasons": [
+        {
+          "code": "ORDER_INACTIVE",
+          "until": null
+        }
+      ],
+      "next_allowed_at": null,
+      "last_given_at": null,
+      "doses_in_window": 0,
+      "history_confirmed_at": 1767254400000,
+      "revision_id": "rev_1"
+    }
+  }
+}

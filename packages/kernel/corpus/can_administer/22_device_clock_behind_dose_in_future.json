@@ -1,0 +1,66 @@
+{
+  "description": "This device recorded a dose 10 minutes in its future, so its clock looks wrong: can't confirm.",
+  "op": "can_administer",
+  "request": {
+    "schema_version": 1,
+    "now": 1767254400000,
+    "context": {
+      "computed_on": "device",
+      "device_id": "dev_a",
+      "last_server_time_seen": 1767250800000,
+      "history_confirmed_at": 1767250800000,
+      "freshness_bound_ms": 21600000,
+      "clock_skew_margin_ms": 120000
+    },
+    "order": {
+      "id": "ord_cerenia",
+      "status": "active",
+      "starts_at": 1764547200000,
+      "ends_at": null,
+      "not_before": null,
+      "counts_spat_out_and_vomited": true,
+      "revisions": [
+        {
+          "id": "rev_1",
+          "effective_from": 1764547200000,
+          "min_interval_ms": 28800000,
+          "max_doses": {
+            "count": 2,
+            "window_ms": 86400000
+          }
+        }
+      ]
+    },
+    "administrations": [
+      {
+        "id": "adm_1",
+        "administered_at": 1767255000000,
+        "status": "given",
+        "entered_in_error": false,
+        "device_id": "dev_a"
+      }
+    ]
+  },
+  "response": {
+    "schema_version": 1,
+    "ok": true,
+    "result": {
+      "decision": "unverified",
+      "reasons": [
+        {
+          "code": "MIN_INTERVAL",
+          "until": 1767283800000
+        },
+        {
+          "code": "CLOCK_SUSPECT",
+          "until": null
+        }
+      ],
+      "next_allowed_at": 1767283800000,
+      "last_given_at": 1767255000000,
+      "doses_in_window": 1,
+      "history_confirmed_at": 1767250800000,
+      "revision_id": "rev_1"
+    }
+  }
+}

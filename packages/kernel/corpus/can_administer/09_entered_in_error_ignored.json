@@ -1,0 +1,64 @@
+{
+  "description": "A dose marked entered in error an hour ago is ignored.",
+  "op": "can_administer",
+  "request": {
+    "schema_version": 1,
+    "now": 1767254400000,
+    "context": {
+      "computed_on": "server",
+      "device_id": null,
+      "last_server_time_seen": null,
+      "history_confirmed_at": null,
+      "freshness_bound_ms": 21600000,
+      "clock_skew_margin_ms": 120000
+    },
+    "order": {
+      "id": "ord_cerenia",
+      "status": "active",
+      "starts_at": 1764547200000,
+      "ends_at": null,
+      "not_before": null,
+      "counts_spat_out_and_vomited": true,
+      "revisions": [
+        {
+          "id": "rev_1",
+          "effective_from": 1764547200000,
+          "min_interval_ms": 28800000,
+          "max_doses": {
+            "count": 2,
+            "window_ms": 86400000
+          }
+        }
+      ]
+    },
+    "administrations": [
+      {
+        "id": "adm_1",
+        "administered_at": 1767222000000,
+        "status": "given",
+        "entered_in_error": false,
+        "device_id": null
+      },
+      {
+        "id": "adm_2",
+        "administered_at": 1767250800000,
+        "status": "given",
+        "entered_in_error": true,
+        "device_id": null
+      }
+    ]
+  },
+  "response": {
+    "schema_version": 1,
+    "ok": true,
+    "result": {
+      "decision": "allowed",
+      "reasons": [],
+      "next_allowed_at": null,
+      "last_given_at": 1767222000000,
+      "doses_in_window": 1,
+      "history_confirmed_at": 1767254400000,
+      "revision_id": "rev_1"
+    }
+  }
+}

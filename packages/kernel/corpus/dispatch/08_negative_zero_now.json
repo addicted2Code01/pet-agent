@@ -1,0 +1,13 @@
+{
+  "description": "Negative zero isn't a valid integer.",
+  "op": "can_administer",
+  "request_text": "{\"schema_version\":1,\"now\":-0,\"context\":{\"computed_on\":\"server\",\"device_id\":null,\"last_server_time_seen\":null,\"history_confirmed_at\":null,\"freshness_bound_ms\":21600000,\"clock_skew_margin_ms\":120000},\"order\":{\"id\":\"ord_cerenia\",\"status\":\"active\",\"starts_at\":1764547200000,\"ends_at\":null,\"not_before\":null,\"counts_spat_out_and_vomited\":true,\"revisions\":[{\"id\":\"rev_1\",\"effective_from\":1764547200000,\"min_interval_ms\":28800000,\"max_doses\":{\"count\":2,\"window_ms\":86400000}}]},\"administrations\":[]}",
+  "response": {
+    "schema_version": 1,
+    "ok": false,
+    "error": {
+      "code": "INVALID_INTEGER",
+      "path": "now"
+    }
+  }
+}

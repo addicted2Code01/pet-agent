@@ -54,3 +54,6 @@ Thumbs.db
 
 # Owner photos (labels show name/address)
 sample images/
+
+# Node
+node_modules/
