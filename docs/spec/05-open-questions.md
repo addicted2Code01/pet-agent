@@ -116,7 +116,7 @@ From the home and cloud design ([08](08-home-and-cloud.md)).
 
 *Recommendation:* relay-first. Accept that remote access, push, SMS and certificates need the internet, and cover outages with Q29's fallbacks rather than a plain-HTTP mode.
 
-*Decided in part (2026-11-07):* home installs can also run standalone, without Pawsitter's services ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)). For connected installs, the recommendation stays relay-first.
+*Decided in part (2026-11-07):* home installs can also run standalone, without Pawsitter's services ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)). For connected installs, the recommendation stays relay-first. The remote-access options, including Tailscale Funnel as a faster start, are compared in [09 §9.5](09-capabilities-and-options.md#95-remote-access-for-home-installs).
 
 **Q28. Which home sign-in options, and which defaults?** The menu is in [08 §8.6](08-home-and-cloud.md#86-home-sign-in-options): paired devices, passkeys, a code to the contact the owner entered, owner approval, a personal PIN, a Pawsitter account, the console, a kiosk, trusted home Wi-Fi, and a shared household PIN.
 
@@ -170,11 +170,23 @@ Add the owner's own SMS provider, Telegram and Matrix bots, and a private certif
 
 *Recommendation:* in the MVP, photos up to 25 MB, documents up to 20 MB, videos up to 60 seconds, and voice messages up to 2 minutes with automatic transcripts. Transcripts are metered as AI usage and skipped when the allotment runs out; the recording still plays. How long media history is kept depends on the plan ([00 §0.7](00-product-offering.md#07-packaging-proposal)). Before the home beta, choose the video encoder that home installs ship (and check its licence), and measure how long re-encoding takes on a NAS.
 
+## Delivery
+
+From the capabilities and delivery options ([09](09-capabilities-and-options.md)).
+
+**Q36. What shape is V1?** The candidates are in [09 §9.8](09-capabilities-and-options.md#98-candidate-v1-shapes): A, cloud and web first; B, A plus thin native shells; C, home first.
+
+*Recommendation:* A. Add B's iOS shell as the first follow-up, or bring it into V1 if the beta shows owners need Taken / Snooze / Skip on the lock screen. Start SMS sender registration now, and add RCS as a fast follow.
+
+**Q37. How does the home edition ship first, and do we ever sell a box?** The options are in [09 §9.6](09-capabilities-and-options.md#96-packaging-home-installs).
+
+*Recommendation:* a Home Assistant app first, because it's the largest ready-made channel and can update itself. Then NAS containers and the Mac installer. Sell a preloaded box only once the software has proven itself, ideally with a hardware partner, because selling hardware makes us its manufacturer.
+
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions), Q26 (daylight-saving gaps) and Q35 (media types and limits), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
-3. Start the long-lead items for the home edition now ([08 §8.18](08-home-and-cloud.md#818-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
+2. Decide Q36 (the V1 shape, [09 §9.8](09-capabilities-and-options.md#98-candidate-v1-shapes)) first. Then decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions), Q26 (daylight-saving gaps) and Q35 (media types and limits), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
+3. Start the long-lead items now. For V1: SMS sender registration (10DLC, or toll-free verification, which needs a business tax ID) and the email domain's sender records ([09 §9.3](09-capabilities-and-options.md#93-reaching-people-and-holding-conversations)). For the home edition ([08 §8.18](08-home-and-cloud.md#818-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
 4. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 5. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, the reminder dispatcher (repeat, escalate, supersede), and `ResolveLocalTime` for times given in words. Write the assistant's test questions ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)) alongside.
 6. Specify the `ModelGateway` flow (route, reserve, settle) with concurrency tests, since overspending costs real money.

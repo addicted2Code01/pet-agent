@@ -23,6 +23,7 @@ At its heart is a **core** that knows nothing about AI, chat, MCP, Discord or an
 | 6 | [Feature research](06-feature-research.md) | What customers value in existing apps; features ranked for us |
 | 7 | [Portable core runtime](07-portable-core.md) | One TypeScript kernel for every host: shims, time zones, authority, integrity, supported engines, conformance |
 | 8 | [Home and cloud editions](08-home-and-cloud.md) | One codebase hosted or at home: HTTPS for home installs, QR joins, sign-in options, revocation, outages, updates, backups, companion services, standalone mode |
+| 9 | [Capabilities and delivery options](09-capabilities-and-options.md) | What the platform must do, the technologies that could deliver each part (channels, the owner app, remote access, packaging, AI), and candidate V1 shapes |
 
 ## Design principles
 

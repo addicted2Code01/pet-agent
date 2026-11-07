@@ -475,6 +475,7 @@ Moving a household between cloud and home comes later (phase 4), but these rules
 - **Q32:** whether the iOS shell is in the cloud MVP.
 - **Q33:** what standalone mode ships first, and when.
 - **Q34:** what standalone mode costs.
+- **Q37:** how the home edition ships first, and whether we ever sell a box ([09 §9.6](09-capabilities-and-options.md#96-packaging-home-installs)).
 
 **Adopted as defaults, open to revisit:**
 - a LaunchDaemon on macOS;
