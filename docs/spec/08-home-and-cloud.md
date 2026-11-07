@@ -404,7 +404,11 @@ There are two ways to set it up:
   - a *trip channel* with exactly the trip's participants, only if the owner invites the sitter to the server. The care thread runs there, and reminders and alerts come with Taken / Snooze / Skip buttons and mention the person they're for, so Discord notifies them. Replies follow the same rules as SMS replies (§8.9). The sitter links their Discord account with a one-time code ([02 §2.17](02-domain-model.md#217-care-threads--channels)), and when the trip ends, the bot removes them from the server.
 
   A sitter who isn't invited uses the web app, email or text, or messages the bot directly (below). On a server shared with other people, anyone with Discord's Administrator permission can read every channel, so setup names those people before the owner channel is used, and the bot warns the owner if that list changes.
-- **Direct messages only.** No server: the owner adds the bot to their own Discord account as a user-installed app, and their one-to-one chat with it is their side of every trip. Sitters can do the same. A user-installed app can always be messaged, but whether it can send the first message, such as a dose alert, is still to be tested (§8.19). This setup is offered only once that's confirmed; until then, Discord needs a server.
+- **Direct messages only.** No server: the owner adds the bot to their own Discord account as a user-installed app, and their one-to-one chat with it is their side of every trip. Sitters can do the same.
+  - Linking works either way round. The bot sends a one-time code, or, if Discord won't let it write first, the person sends the bot the code the app shows them, which also opens the chat.
+  - Each person's Discord status shows in readiness and on the trip. The owner is told when someone hasn't linked yet, or when Discord turns a message down, so they can talk to the sitter.
+  - Until a person's chat works, their reminders and alerts go by the next channel on their list, as they do whenever a channel fails ([02 §2.15](02-domain-model.md#215-notifications--reminders)).
+  - Still to test (§8.19): whether the bot can write first and, if not, whether it can keep messaging someone after they've written to it, such as a reminder hours later. If it can't, this setup carries only replies, and reminders and alerts always use another channel.
 
 **Outages.** Nothing outside the house can take over reminders, so:
 - The sitter adds the trip's dose times to their phone as alarms, from a calendar file or from a list to set by hand. The times come from the kernel, and a changed dose time sends a new file. An alarm can't tell whether a dose was given, so when one goes off, the sitter checks the offline copy or the care sheet's dose grid first.
@@ -493,7 +497,7 @@ Moving a household between cloud and home comes later (phase 4), but these rules
 - whether phones leave a Wi-Fi network that has no internet;
 - Chrome possibly gating top-level navigations to local addresses;
 - whether phones keep the alarms in an imported calendar file (iOS Calendar, Google Calendar);
-- how reliably Discord's app delivers notifications, and whether a bot can send the first message to someone who added it to their own account but shares no server with it;
+- how reliably Discord's app delivers notifications; whether a user-installed bot can send the first message to someone it shares no server with and, if not, whether it can keep messaging them after they've written to it;
 - Tailscale Funnel's bandwidth and connection limits, for photo updates.
 
 Until each is confirmed, its worst-case fallback applies. For example, assume a per-install TWA can't verify its asset links, and send its push through the relay.

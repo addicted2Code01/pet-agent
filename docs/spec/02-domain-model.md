@@ -669,7 +669,8 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 | `channel` | enum | `sms` · `whatsapp` · `discord` · `slack` · `telegram` · `email` · … |
 | `external_user_id` | string | A phone number, a WhatsApp id, a Discord user id. Unique per channel within the account. |
 | `user_id` | User | Who it is. |
-| `verified_at`, `verified_by` | | Verified with a one-time code sent through that channel, or linked by the owner. |
+| `verified_at`, `verified_by` | | Verified with a one-time code sent through that channel, or one the person sends from it, or linked by the owner. |
+| `reachable` | enum | `yes` · `waiting` (the person hasn't written to the bot yet, where a channel needs that) · `refused` (the channel turned a delivery down). Shown to the owner and in readiness. |
 | `revoked_at?` | instant | |
 
 **`ChannelBinding`**: one outside conversation that carries a thread. In-app and web conversations need none, because those channels are ours.
