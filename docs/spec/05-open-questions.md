@@ -164,10 +164,16 @@ Add the owner's own SMS provider, Telegram and Matrix bots, and a private certif
 
 *Recommendation:* free. Connected installs and Plus stay the paid path, and a free standalone mode builds trust with households that want their data at home. Revisit if support costs grow.
 
+## Media
+
+**Q35. Which media types are in the MVP, and with what limits?** Photos and documents already are. Voice messages are quick for a sitter with a dog on the lead, and owners value short videos, but both cost storage and bandwidth, and transcripts cost AI usage ([02 §2.11](02-domain-model.md#211-media)).
+
+*Recommendation:* in the MVP, photos up to 25 MB, documents up to 20 MB, videos up to 60 seconds, and voice messages up to 2 minutes with automatic transcripts. Transcripts are metered as AI usage and skipped when the allotment runs out; the recording still plays. How long media history is kept depends on the plan ([00 §0.7](00-product-offering.md#07-packaging-proposal)). Before the home beta, choose the video encoder that home installs ship (and check its licence), and measure how long re-encoding takes on a NAS.
+
 ## Next steps
 
 1. Validate the offering with interviews and hands-on trials ([06 §6.8](06-feature-research.md#68-what-to-validate-next)), before locking pricing (Q19) or investing beyond MVP in "where is it?".
-2. Decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions) and Q26 (daylight-saving gaps), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
+2. Decide Q20 (name), Q21 and Q32 (owner app and iOS shell), Q25 (minimum versions), Q26 (daylight-saving gaps) and Q35 (media types and limits), which shape the first build; Q30 (home-zone domain) now, for the long-lead items in step 3; Q27 to Q29 and Q31 before the home beta; and Q33 and Q34 before home GA.
 3. Start the long-lead items for the home edition now ([08 §8.18](08-home-and-cloud.md#818-phasing)): register the home zone, apply for the Public Suffix List on isolation grounds, request a Let's Encrypt rate-limit override, and set up a backup CA.
 4. Write command/query schemas (inputs, outputs, errors) for the MVP set.
 5. Build the conformance corpus first ([07 §7.11](07-portable-core.md#711-proving-it-the-conformance-suite)), then the safety-critical algorithms against it: `can_administer` (including dated revisions and unverified history), recurrence across daylight-saving changes, `whats_next`, the reminder dispatcher (repeat, escalate, supersede), and `ResolveLocalTime` for times given in words. Write the assistant's test questions ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)) alongside.

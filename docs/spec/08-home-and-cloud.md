@@ -391,15 +391,20 @@ Everything that doesn't need a companion service works as on a connected install
 - Discord can read these messages, so discreet mode is on by default: a reminder says "Sonic's 8 pm dose, item 2 on the care sheet" rather than naming the medication, unless the owner allows names.
 - With Discord and no way in, a sitter still gets reminders, answers them and can ask questions in the care thread; the printed care sheet covers the rest.
 
-There are two ways to set it up:
-- **A household server.** The household gets a private Discord server. A sitter joins it with an invite for the trip and links their Discord account with a one-time code ([02 §2.17](02-domain-model.md#217-care-threads--channels)). They then get reminders and alerts as direct messages with Taken / Snooze / Skip buttons, and the trip's care thread runs there too. Replies follow the same rules as SMS replies (§8.9). For anyone who doesn't accept direct messages, the bot posts in a private channel for the trip. When the trip ends, the bot removes the sitter from the server.
-- **Direct messages only.** There's no server of the owner's own: each person talks to the bot one to one. The owner's chat with the bot carries their side of every trip:
-  - the assistant's answers to the sitter: those about medication, health and incidents at once, or every one if the owner chooses (Q22);
-  - questions the assistant couldn't answer from the records ([03 §3.8](03-core-architecture.md#38-how-the-ai-assistant-plugs-in));
-  - dose alerts, incidents and the daily report.
+**The owner's side of a trip.** Wherever an owner follows trips on Discord, they get:
+- the assistant's answers to the sitter: those about medication, health and incidents at once, or every one if the owner chooses (Q22);
+- questions the assistant couldn't answer from the records ([03 §3.8](03-core-architecture.md#38-how-the-ai-assistant-plugs-in));
+- dose alerts, incidents, photo updates and the daily report.
 
-  The owner replies to an answer to correct it, or to a question to answer it. The reply reaches the sitter on whatever channel they use, and a change to the records comes back as a draft with an Apply button ([03 §3.8.2](03-core-architecture.md#382-owner-corrections)). Join approvals still open in the app. Sitters use the web app, email or text, or talk to the bot one to one in the same way.
-- **Discord's rule on messaging.** A bot can message only people who share a server with it and accept messages from its members. With direct messages only, the owner either adds the bot to a server they already use, where it never posts, or adds it to their own Discord account as a user-installed app. The owner can always message a user-installed app, but whether the app can send the first message, such as a dose alert, without a shared server is still to be tested (§8.19). Until then, setup uses a server the owner already has.
+They reply to an answer to correct it, or to a question to answer it. The reply reaches the sitter on whatever channel they use, and a change to the records comes back as a draft with an Apply button ([03 §3.8.2](03-core-architecture.md#382-owner-corrections)). Join approvals still open in the app.
+
+There are two ways to set it up:
+- **On a server.** The owner adds the bot to a server: one made for the household, or one they already have for other things. The bot creates the channels and sets who can see them, so nobody sets permissions by hand:
+  - an *owner channel*, seen only by the owners and the bot, for the owners' side of every trip;
+  - a *trip channel* with exactly the trip's participants, only if the owner invites the sitter to the server. The care thread runs there, and reminders and alerts come with Taken / Snooze / Skip buttons and mention the person they're for, so Discord notifies them. Replies follow the same rules as SMS replies (§8.9). The sitter links their Discord account with a one-time code ([02 §2.17](02-domain-model.md#217-care-threads--channels)), and when the trip ends, the bot removes them from the server.
+
+  A sitter who isn't invited uses the web app, email or text, or messages the bot directly (below). On a server shared with other people, anyone with Discord's Administrator permission can read every channel, so setup names those people before the owner channel is used, and the bot warns the owner if that list changes.
+- **Direct messages only.** No server: the owner adds the bot to their own Discord account as a user-installed app, and their one-to-one chat with it is their side of every trip. Sitters can do the same. A user-installed app can always be messaged, but whether it can send the first message, such as a dose alert, is still to be tested (§8.19). This setup is offered only once that's confirmed; until then, Discord needs a server.
 
 **Outages.** Nothing outside the house can take over reminders, so:
 - The sitter adds the trip's dose times to their phone as alarms, from a calendar file or from a list to set by hand. The times come from the kernel, and a changed dose time sends a new file. An alarm can't tell whether a dose was given, so when one goes off, the sitter checks the offline copy or the care sheet's dose grid first.

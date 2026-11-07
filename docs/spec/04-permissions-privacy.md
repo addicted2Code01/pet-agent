@@ -76,6 +76,9 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - On ingest: strip all EXIF/XMP/IPTC metadata (GPS included), re-encode, generate variants, compute a hash. Assets aren't linkable until this completes.
 - Label photos (prescriptions) default to `private`.
 - Signed, short-lived URLs only; no public buckets.
+- `private` media never go to outside channels (SMS, Discord, WhatsApp, email): only a link that opens the app after sign-in. Media sent through those channels also live on them (§4.9).
+- Voice messages are transcribed only through the `ModelGateway`, routed by sensitivity like any model call ([03 §3.9.3](03-core-architecture.md#393-routing-by-sensitivity)).
+- Media follow the retention of the record they're attached to: care-thread media go with the thread (§4.9), evidence with its task. Deleting one removes the file and every variant; the record that it existed stays.
 
 ## 4.6 Data rights
 
@@ -110,7 +113,7 @@ Vet authorization records the owner's instructions to their sitter. It isn't a l
 - **No secrets in threads.** The assistant never posts secret values; when asked, it points to the reveal button. If anyone types something that looks like a code or password, the app offers to save it as a secret instead and masks it before any hosted model sees it.
 - **Outside engagements, a member's assistant chats are private to them.** A shared household thread is V2.
 - **Channels are opt-in.** The owner chooses which channels a trip allows (app, web, SMS, WhatsApp, Discord, …), and each person links their own account on a channel with a one-time code sent through it. Messages from unlinked accounts are never accepted, and the sender learns nothing about the household.
-- **Private conversations only.** A thread can be carried by a direct message or a private thread containing exactly its participants, never a group channel where others could read it.
+- **Private conversations only.** A thread can be carried by a direct message or a private thread containing exactly its participants, never a group channel where others could read it. On a Discord server shared with other people, its administrators can read every channel, so setup names them and the owner accepts that before the bot posts there ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)).
 - **Copies on other platforms.** Messages sent through SMS, WhatsApp or Discord also live on those platforms. Deleting a thread in Pawsitter can't delete those copies; the owner is told so when enabling a channel.
 - **Consent.** SMS and WhatsApp need the recipient's opt-in, and replying "STOP" always works.
 

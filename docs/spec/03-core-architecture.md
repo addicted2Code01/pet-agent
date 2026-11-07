@@ -74,7 +74,7 @@ Each command validates input, checks policy, enforces invariants, writes through
 | History | `RestoreRevision` (writes a new revision with old values), `MarkEnteredInError` (a dose, sighting, completion or stock transaction, with a reason) |
 | Knowledge | `CreateKnowledgeEntry`, `ReviseKnowledgeEntry`, `ArchiveKnowledgeEntry`, `CreateSecret`, `RotateSecret`, `RevealSecret` (a command, because it's logged) |
 | Contacts | `CreateContact`, `UpdateContact`, `LinkContact`, `UnlinkContact` |
-| Media | `BeginUpload` → `CompleteUpload` (strips metadata, makes variants), `LinkMedia`, `UnlinkMedia` |
+| Media | `BeginUpload` → `CompleteUpload` (strips metadata, makes variants), `LinkMedia`, `UnlinkMedia`, `SetAltText`, `DeleteMedia` (removes the files; the record stays) |
 | Incidents | `ReportIncident`, `AcknowledgeIncident`, `ResolveIncident` |
 | AI usage | `SetUsageLimit`, `RemoveUsageLimit`, `GrantCredits` (admin), `PurchaseCredits` (V2) |
 | Placement | `PairEdgeNode`, `UnpairEdgeNode`, `SetCapabilityRoutes`, `MoveSecretKey` (all V2) |
@@ -138,7 +138,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `ReportBuilder` | Assemble visit, daily and stay reports from events, and push them to the owner. |
 | `ImportDrafting` | Turn a pasted care note into drafts (§3.8.1). |
 | `LowStockCheck` | Raise `stock.low` and fill the shopping list. |
-| `MediaPipeline` | Strip metadata, make variants, compute hashes. |
+| `MediaPipeline` | Strip metadata, re-encode, make variants and video posters, compute hashes, and request transcripts of voice messages. A media worker does this in the cloud; at home, the home machine does. |
 | `Retention` | Hard-delete soft-deleted data past retention; purge secrets of closed engagements from caches. |
 | `PeriodRollover` | Start each billing period: issue the plan's credit grant and expire the previous one. |
 | `ReservationSweeper` | Release usage reservations whose calls never settled (crashed workers). |
@@ -162,6 +162,7 @@ Every command emits one or more events (`2.12 Event`), stored in the same transa
 | `Geo` | Geocode addresses; geofence checks | Mapping provider, none |
 | `LanguageModel` | Generate prose from structured input (reports, summaries) | Local llama.cpp, Claude API, none |
 | `Vision` | Describe or identify a photo ("which item is this?") | Local VLM, hosted model, none |
+| `SpeechToText` | Transcribe voice messages and the speech in videos | Local model, hosted provider, none |
 | `BarcodeLookup` | Barcode → product details | Product databases, none |
 
 Every port has a **null implementation**, so the core runs fully without AI, search engines, maps or notifications. Features degrade gracefully instead of failing. On every host, these ports and the runtime members in [07 §7.3](07-portable-core.md#73-the-host-interface) (randomness, timers, logging, secure storage, digests, server time, connectivity, lifecycle and diagnostics) come in one host object. The exception is `IdGenerator`: core services build UUIDv7 ids from the host's clock and randomness.
@@ -221,16 +222,16 @@ A trip has one care thread, but people reach it in different ways: the owner in 
 
 **Inbound.**
 1. The adapter receives a message (a WhatsApp webhook, a Discord event, an incoming SMS) and looks up the sender's `ChannelIdentity`. An unknown or unverified sender gets a link to verify, and learns nothing about the household.
-2. It finds the thread through the `ChannelBinding` and posts the message with its `channel`, `external_message_id` and the channel's timestamp. A repeated delivery with the same external id is dropped (invariant 23).
+2. It finds the thread through the `ChannelBinding` and posts the message with its `channel`, `external_message_id` and the channel's timestamp. A repeated delivery with the same external id is dropped (invariant 23). Attachments are downloaded at once, because channel links expire, and appear once the media pipeline has processed them.
 3. If the channel has native replies (a WhatsApp quote, a Discord reply), `reply_to_id` comes from the channel's message id through the delivery records. Otherwise the message is matched to the latest assistant answer sent to that person; if that's ambiguous, the assistant asks which answer is meant.
 4. The message acts with the person's permissions and the channel's egress tier. Outside platforms are `normal` and never receive secrets.
 
 **Outbound.**
 - Each message is stored once and delivered to each participant on their chosen channels, as one `NotificationDelivery` per copy carrying the channel's message id.
 - The assistant answers on the channel where it was asked. Other participants get the answer according to the thread's notification policy (Q22).
-- Each channel renders the same message its own way. Discord and WhatsApp show an "Apply" button on a draft; SMS gets plain text with a short link that opens the draft in the app after sign-in.
+- Each channel renders the same message its own way. Discord and WhatsApp show an "Apply" button on a draft; SMS gets plain text with a short link that opens the draft in the app after sign-in. Photos and videos go as attachments where the channel shows them, and as a link by text; `private` media only ever go as a link.
 - Channel rules belong in the adapter: WhatsApp's 24-hour reply window and approved message templates, SMS opt-out ("STOP"), Discord rate limits. Paid channels (SMS, WhatsApp) are metered like AI usage (§3.10).
-- A person can follow a trip entirely in a one-to-one chat with a bot, such as the owner's Discord DM. Their side of the thread arrives there under the notification policy, and their replies come back as messages, corrections or answers ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)).
+- A person can follow a trip entirely in their own chat with a bot, such as an owner's private Discord channel or direct message. Their side of the thread arrives there under the notification policy, and their replies come back as messages, corrections or answers ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)).
 
 **The combined view.** `Thread`, `Timeline` and `Inbox` merge every channel into one stream, ordered by when the core received each message, with a badge showing where each came from. Both sides see the same conversation: the owner sees everything, and the sitter sees the whole trip thread, including what the owner sent from Discord, on whichever channel they use. Because `Context()` includes the merged thread, the assistant answering on WhatsApp knows what the owner said on Discord.
 
@@ -281,7 +282,7 @@ Decided (Q2): **cloud first, with the location of each part configurable.** Two 
 | Component | Connects through | Cloud | Owner's hardware |
 |---|---|---|---|
 | Core + database + search index + jobs | in process | MVP | V2: the home edition ([08](08-home-and-cloud.md)) |
-| Language model, vision | `LanguageModel`, `Vision` ports | MVP (hosted, `normal` data only) | V2, via an edge node; may see `private` data |
+| Language model, vision, speech-to-text | `LanguageModel`, `Vision`, `SpeechToText` ports | MVP (hosted, `normal` data only) | V2, via an edge node; may see `private` data |
 | Media files | `BlobStore` port | MVP | V2, via an edge node, e.g. to keep prescription-label photos at home |
 | Secret encryption keys | `Crypto` port | MVP (cloud KMS) | V2, via an edge node: the cloud stores ciphertext it can't decrypt |
 | Notifications | `Notifier` port | MVP | Home edition: web push sent directly from home; native push through Pawsitter's push relay; SMS and email through the cloud messaging bridge ([08 §8.9](08-home-and-cloud.md#89-the-owner-away-from-home)). Standalone installs use web push, the owner's Discord bot, and email or SMS through the owner's own accounts ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)) |

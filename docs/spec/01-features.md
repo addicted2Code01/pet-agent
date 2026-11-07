@@ -125,7 +125,7 @@ Every feature below is a core capability. How it's surfaced (screen, chat, voice
 | Feature | Priority | Notes |
 |---|---|---|
 | Activity feed: tasks completed, meds given, moves, stock changes, incidents | MVP | From the event log. |
-| Photo updates and visit / daily reports to the owner, pushed as they happen | MVP | Generated from events; an AI may write the prose. 06 #3. |
+| Photo and short video updates, and visit / daily reports to the owner, pushed as they happen | MVP | Generated from events; an AI may write the prose. Video limits: Q35. 06 #3. |
 | **Stay summary** at handback: what was done, on time or late, photos, incidents | MVP | 06 #23. |
 | **Push notifications** for reminders, escalations, refused or missed doses, urgent incidents and photo updates; email as backup | MVP | Email-only updates get missed (06 #3). Decided (Q15). |
 | Reminders for sitters without the app: SMS for medications, email or web push for the rest | MVP | SMS is metered like AI ([03 §3.10](03-core-architecture.md#310-ai-usage-metering)). |
@@ -216,6 +216,7 @@ The owner sees everything the AI tells the sitter, and can correct it in the sam
 | Feature | Priority | Notes |
 |---|---|---|
 | ★ **Care thread** for each trip: the sitter's questions, the AI's answers, replies from the owner and family, and key events (doses logged, incidents) in one stream | MVP | In the sitter's web view, in the owner's app and on the web. |
+| **Photos, videos and voice messages** in the care thread, from the app, the web or any channel; voice messages get an automatic transcript | MVP | A transcript never records anything by itself ([02 §2.11](02-domain-model.md#211-media)). Limits: Q35. |
 | The owner sees every AI answer given to the sitter, live; the sitter is told the owner can see the thread | MVP | Answers can't be hidden or deleted during the trip. |
 | Each AI answer shows what it was based on: the records it used and when they last changed | MVP | Makes stale data easy to spot: "Based on: Cerenia schedule, updated Oct 30". |
 | ★ **Reply to correct**: the owner or family replies to an answer; it's marked "corrected" for everyone, the AI posts an updated answer, and the sitter is notified at once | MVP | Push for app users; SMS for a sitter without the app when it concerns medication. |
@@ -227,7 +228,7 @@ The owner sees everything the AI tells the sitter, and can correct it in the sam
 | Anyone in the thread can correct the AI, including the sitter ("the leash isn't in the basket") | MVP | Applying the change follows normal permissions: a sitter can record where an item is; medication changes need the owner or family. |
 | Owner notified at once of AI answers about medication, health or incidents; other answers appear in the thread and the daily report | MVP | Per trip, the owner can switch to "notify me of every answer" (Q22). |
 | **One thread, every channel**: messages from the app, the website, SMS, WhatsApp, Discord and others combine into the trip's thread, each marked with where it came from | MVP | The model is channel-independent from day one. MVP channels: the app, the website (which sitters use after joining) and two-way SMS; WhatsApp and Discord in V2 (decided, Q24). |
-| **Follow a trip from a Discord DM**: the owner gets the assistant's answers, questions for them and alerts in a one-to-one chat with the bot, and replies there to correct or answer, with no server needed | V2 | Standalone installs use the owner's own bot ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)); cloud and connected installs, Pawsitter's (Q24). |
+| **Follow a trip on Discord**: the owner gets the assistant's answers, questions for them and alerts in a private channel on a server they already have, or in a direct message with the bot, and replies there to correct or answer; the sitter needn't join | V2 | Standalone installs use the owner's own bot ([08 §8.15](08-home-and-cloud.md#815-standalone-mode)); cloud and connected installs, Pawsitter's (Q24). Direct messages need the bot added to the owner's account as a user-installed app, and wait on a test ([08 §8.19](08-home-and-cloud.md#819-open-decisions-and-hypotheses)). |
 | Each person chooses their channels and gets the whole thread there: a sitter on WhatsApp sees the owner's reply from Discord | MVP | One message, many deliveries; never duplicated. |
 | Correct from any channel: a native reply (a WhatsApp quote, a Discord reply) targets that answer; on SMS the latest answer is assumed, or the AI asks which | MVP | |
 | **Combined views**: the owner's inbox across all threads and channels, and a timeline per trip or pet merging the conversation with events | MVP | Owner and sitter each see everything they're allowed to. |

@@ -458,18 +458,35 @@ Calendar tasks are **materialized ahead** for a rolling horizon (e.g. 14 days) b
 
 ## 2.11 Media
 
+Photos, videos, voice messages and documents are all **`MediaAsset`s**, stored through the `BlobStore` port. They attach in two ways: to subjects (a pet, item, place, site or medication order) through a **`MediaLink`**, and to events through those records' own `media_ids[]`: a task's evidence, an administration, an incident, a care-thread message (2.17) or a report.
+
 **`MediaAsset`**
 
 | Field | Type | Notes |
 |---|---|---|
-| `storage_key` | string | Opaque key in the blob-store port. |
-| `mime_type`, `bytes`, `sha256` | | Dedup by hash. |
-| `width?`, `height?`, `duration?` | | |
-| `metadata_stripped` | bool | **Must be true** before the asset is linked; EXIF/GPS removed on ingest. |
+| `kind` | enum | `photo` · `video` · `audio` (a voice message) · `document` (a PDF, such as a vaccination certificate) |
+| `status` | enum | `uploading` · `processing` · `ready` · `failed` · `deleted`. Only `ready` assets are linked or shown (invariant 8). |
+| `storage_key` | string | Opaque key in the blob-store port, naming its provider, for the processed file. The upload as received is deleted once processing succeeds, so no copy with metadata is kept. |
+| `mime_type`, `bytes`, `sha256` | | Of the processed file. Dedup by hash within an account. |
+| `width?`, `height?`, `duration_ms?` | | |
+| `captured_at?` | instant | When it was taken, as the device reported it: the only detail read from the file's metadata before that's removed. |
+| `uploaded_by` | Actor | Who added it, from which device. |
+| `source` | enum | `app` · `web` · `sms` · `discord` · `whatsapp` · `email` · `import`. Adapters download channel media at once, because channel links expire. |
+| `metadata_stripped` | bool | **Must be true** before the asset is linked; EXIF, GPS and other metadata removed on ingest. |
 | `sensitivity` | enum | `normal` · `private` (e.g. prescription labels) |
-| `variants` | object | Thumbnails and resized versions. |
+| `variants[]` | `{purpose, storage_key, mime_type, width?, height?, bytes}` | `thumb` and `display` for photos and a document's first page; `poster` (a still) and `playback` for videos; `playback` for voice messages. Re-encoded to formats every supported browser shows: JPEG or WebP (Chrome and Firefox can't show iPhone HEIC photos), H.264 video and AAC audio. |
+| `transcript?` | `{text, language, made_by, confidence?}` | For voice messages and videos with speech: made through the `ModelGateway` (purpose `transcription`), shown as "transcribed automatically", and searchable. It never records anything by itself (below). |
+| `alt_text?` | text | For screen readers: written by a person, or drafted by the vision port and confirmed. |
+| `deleted_at?`, `deleted_by?` | | Deleting removes the file and every variant. The record stays, so history shows "photo deleted". |
 
 **`MediaLink`**: `{media_id, subject_id, role, caption?, sort_order}` where `role` is `profile` · `reference` (what it looks like / where it is) · `label` · `evidence` · `document`.
+
+**Rules.**
+- Phones shrink photos and videos before uploading, to save data on mobile networks and through the relay; the server still strips metadata itself.
+- Proposed MVP limits (Q35): photos up to 25 MB, videos up to 60 seconds, voice messages up to 2 minutes, documents up to 20 MB. How long media history is kept depends on the plan ([00 §0.7](00-product-offering.md#07-packaging-proposal)).
+- Media recorded offline waits in the phone's outbox. A dose or task completion it belongs to syncs without waiting for it.
+- A transcript is a model's reading of someone's words and can be wrong ("fifteen" heard as "fifty"). The assistant may read it, but a dose or change it mentions becomes a draft the speaker confirms, with the recording beside it ([04 §4.4](04-permissions-privacy.md#44-ai-and-external-interfaces)).
+- `private` media are never sent on outside channels. SMS, Discord, WhatsApp and email get a link instead, which opens the app after sign-in.
 
 ## 2.12 Incidents & events
 
@@ -533,6 +550,7 @@ Hosted model calls and SMS messages are metered per account (see [03 §3.10](03-
 | `cost_per_mtok` | `{input, output, cache_write, cache_read}` money | What the provider charges us per million tokens |
 | `credits_per_mtok` | `{input, output, cache_write, cache_read}` decimal | What the customer is charged. Proportional to cost = cost-based credits; equal across models = token-based; anything between is a blend. |
 | `cost_per_image?`, `credits_per_image?` | | For vision calls |
+| `cost_per_audio_minute?`, `credits_per_audio_minute?` | | For transcription |
 
 **`UsageRecord`**: the immutable ledger, one row per model call.
 
@@ -541,10 +559,11 @@ Hosted model calls and SMS messages are metered per account (see [03 §3.10](03-
 | `occurred_at` | instant | |
 | `actor`, `interface` | | Who caused it and through which interface (`system` for automatic visit reports) |
 | `capability` | enum | `language_model` · `vision` · `sms` (later `embedding`, `speech`) |
-| `purpose` | enum | `assistant` · `care_note_import` · `visit_report` · `photo_lookup` · `summary` · `sitter_reminder` · … |
+| `purpose` | enum | `assistant` · `care_note_import` · `visit_report` · `photo_lookup` · `summary` · `sitter_reminder` · `transcription` · … |
 | `provider`, `model`, `rate_id` | | The rate in force at the time |
 | `tokens` | `{input, output, cache_write, cache_read}` int | As reported by the provider |
 | `images` | int | |
+| `audio_seconds` | int | For transcription |
 | `provider_cost` | money | Exact decimal in micro-units of the currency |
 | `credits` | decimal | |
 | `billable` | bool | False for the owner's edge node or an owner-supplied provider key |
@@ -674,6 +693,7 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 | `sent_at?`, `received_at` | instant | The channel's timestamp, and when the core received it. Threads are ordered by `received_at`. |
 | `kind` | enum | `question` · `answer` · `reply` · `correction` · `event` (a dose logged, an incident) · `system` |
 | `body` | text | As written. People's edits are new revisions, shown as "edited"; assistant answers are never edited. Text that looks like a code or password is offered as a secret instead ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
+| `media_ids[]` | MediaAsset | Photos, videos, voice messages and documents sent with the message, from any channel. A voice message's `body` can be empty. |
 | `reply_to_id?` | Message | From the channel's native reply when it has one (a WhatsApp quote, a Discord reply); otherwise inferred ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)). |
 | `sources[]` | `{subject_id, version}` | For assistant answers: the record revisions it used, shown as "Based on: Cerenia schedule, updated Oct 30". |
 | `answer_line?` | `{op, text, decision_record_id?}` | For answers built on a safety query: the line that code rendered from the result, shown before the assistant's own words in `body` ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)). |
@@ -696,7 +716,7 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 5. `CareRoutine.kind = medication` ⇔ `medication_order_id` is set; the order's pet is in `pet_ids`.
 6. A dose that `can_administer` denies can't be started from the app unless an owner overrides with a reason (e.g. a vet's instruction). One it answers `unverified` for, or that hits an error, can be started only after the caregiver confirms they've seen the reasons. Both raise an event. A dose that already happened is always recorded as it happened. If it broke the limits, it's marked `outside_limits` and the owner and caregivers are alerted at once. Refusing to record a real dose would make every later answer wrong.
 7. Every entity's `account_id` equals the `account_id` of everything it references.
-8. Any linked `MediaAsset` has `metadata_stripped = true`.
+8. A `MediaAsset` is linked or shown only when it's `ready`, with `metadata_stripped = true`.
 9. A caregiver's access is valid only within `[engagement.starts_at − access_lead, engagement.ends_at + access_lag]`, ends at `returned_at` if the owner is home early, and covers only the engagement's pets and sites. After that, their device may do only what invariant 24 allows.
 10. A billable model call or SMS starts only with a held `UsageReservation` that fits within the credit balance and every applicable `UsageLimit`.
 11. Credit balances and usage counters equal what the `UsageRecord` ledger implies, and can be rebuilt from it.
