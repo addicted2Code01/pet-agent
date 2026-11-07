@@ -8,7 +8,7 @@ Researched and verified on 2026-11-04 across five host groups: 216 fact checks (
 
 | Layer | What it is | Where it runs |
 |---|---|---|
-| **Kernel** | The domain logic: invariants, `can_administer`, recurrence across daylight-saving changes, what's next and overdue, authorization and redaction, version checks, metering arithmetic. Pure, synchronous and deterministic: JSON in, JSON out. `now` and new ids are passed in; it has no clock, randomness or I/O of its own. | Every supported engine, including the most limited embedded ones |
+| **Kernel** | The domain logic: invariants, `can_administer`, recurrence across daylight-saving changes, what's next and overdue, resolving times given in words ("Tuesday morning") against a reference date, authorization and redaction, version checks, metering arithmetic. Pure, synchronous and deterministic: JSON in, JSON out. `now` and new ids are passed in; it has no clock, randomness or I/O of its own. | Every supported engine, including the most limited embedded ones |
 | **Core services** | The command and query handlers: load through ports, call the kernel, save, emit events. Asynchronous. | Node, Bun, Deno, browsers and WebViews; embedded engines through a host adapter (§7.9) |
 
 Each release has two canonical artifacts under one `kernelVersion`: the classic script, and the ES module wrapper generated from it, each with its own sha256. A host counts as supported only after it passes the golden suite on the exact artifact it loads, and it records that artifact's sha256.
@@ -177,6 +177,7 @@ During research, code ran only on Node 22.23.4, Bun 1.4.4 and Chromium 153. The 
   - every-8-hours intervals across daylight-saving changes;
   - COUNT, UNTIL and EXDATE under the gap policy;
   - what's next and overdue at boundaries;
+  - times given in words: "Tuesday" in a note written on a Tuesday, "tomorrow" just after midnight, "at 6" across a daylight-saving change, "morning" with the household's own times;
   - redaction by role, version conflicts, decimal rounding, sort ties, error codes.
 - **Display vectors.** The web app, the app shells and notification text render the Vancouver and Havana dose times in Playwright Chromium, Firefox and WebKit and on the test devices, including hosts with older time-zone data. What's shown must match the kernel's local fields.
 - **Engine matrix in CI.** Node 22, 24 and 26; Bun with the JIT off inside an isolated `vm` context; Deno; Playwright Chromium, Firefox and WebKit, plus the previous major of each browser and Firefox ESR 153; QuickJS and quickjs-ng; the Hermes V1 command-line tool with the app's flags; Jint on each target framework; ClearScript on Windows, Linux and macOS.

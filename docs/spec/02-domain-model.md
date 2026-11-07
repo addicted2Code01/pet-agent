@@ -613,7 +613,7 @@ Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranke
 
 **`Template`**: *not account-scoped.* A starter set such as `cat`, `dog`, `puppy` or `senior_on_medication`: routines, knowledge prompts ("What's normal for her?"), playbooks and place suggestions.
 
-**`ImportJob`**: an owner's pasted care note being turned into drafts. `source_text` (private; kept until the job is done, then deleted unless the owner keeps it), `masked_secrets` (likely codes and passwords found locally before any model sees the text), `status` (`drafting` · `ready` · `done` · `failed`), `usage_record_ids[]`.
+**`ImportJob`**: an owner's pasted care note being turned into drafts. `source_text` (private; kept until the job is done, then deleted unless the owner keeps it), `masked_secrets` (likely codes and passwords found locally before any model sees the text), `written_on` (the day the note was written, which the owner confirms, because times given in words count from it), `status` (`drafting` · `ready` · `done` · `failed`), `usage_record_ids[]`.
 
 **`Draft`**: a proposed record waiting for a person.
 
@@ -626,6 +626,7 @@ Setup must take minutes, not an evening ([06 #6](06-feature-research.md#63-ranke
 | `base_version?` | int | The target's version when the draft was made. If the target has changed since, the draft goes `stale` and is re-drafted against the new version. |
 | `proposed` | object | Field values, validated against the target's schema. |
 | `source_excerpt?` | text | The words it came from. For a new medication order this becomes `instructions_verbatim`; for a correction it's the owner's message. |
+| `times_in_words[]` | `{text, fields, reference_date, resolved?, candidates[]}` | Times the source gives in words ("until Tuesday morning"): the words, the fields the model read, the date they count from, and what the kernel resolved. With more than one candidate, the draft can't be accepted until the owner picks one (invariant 29). |
 | `status` | enum | `pending` · `accepted` · `edited_and_accepted` · `rejected` · `stale` |
 | `decided_by?`, `decided_at?` | | |
 
@@ -675,6 +676,8 @@ Every answer the assistant gives a caregiver during an engagement lives in a thr
 | `body` | text | As written. People's edits are new revisions, shown as "edited"; assistant answers are never edited. Text that looks like a code or password is offered as a secret instead ([04 §4.9](04-permissions-privacy.md#49-care-threads)). |
 | `reply_to_id?` | Message | From the channel's native reply when it has one (a WhatsApp quote, a Discord reply); otherwise inferred ([03 §3.8.3](03-core-architecture.md#383-one-thread-many-channels)). |
 | `sources[]` | `{subject_id, version}` | For assistant answers: the record revisions it used, shown as "Based on: Cerenia schedule, updated Oct 30". |
+| `answer_line?` | `{op, text, decision_record_id?}` | For answers built on a safety query: the line that code rendered from the result, shown before the assistant's own words in `body` ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)). |
+| `wording_check?` | `{result, found[]}` | `passed` · `rewritten` · `dropped`, and what the check of the assistant's words found. |
 | `as_of`, `kernel_sha256`, `snapshot_id` | | For assistant answers: the instant it was computed at, the kernel build, and the time-zone snapshot. Replaying uses `as_of` as both `now` and the recorded-time cutoff with the same kernel and snapshot, so `ExplainAnswer` shows exactly what the assistant saw (2.1, [07 §7.8](07-portable-core.md#78-versions-replay-and-integrity)). |
 | `topics` | set | `medication` · `health` · `incident` · `location` · `routine` · `other`. Drives notifications. |
 | `status` | enum | `active` · `corrected` (someone corrected it) · `superseded` (an updated answer replaced it) |
@@ -713,6 +716,8 @@ Each copy delivered to a participant is a `NotificationDelivery` (2.15) carrying
 25. Queued facts (doses, task completions) are never discarded because a grant ended or a request was refused.
 26. Transport never raises trust, and relayed traffic is never treated as local.
 27. An account has exactly one data home. For a connected home account, the cloud holds only the operational records listed in [08 §8.14](08-home-and-cloud.md#814-what-each-companion-service-stores-and-sees); for a standalone one, nothing.
+28. A time, dose or yes-or-no answer that a person is shown about a pet's care comes from a computed result, in a line rendered by code. A model's own words never state one ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)).
+29. A time given in words becomes a date only through the kernel, counted from a stated reference date, and a record holding one is saved only after a person confirms its weekday and date.
 
 ## 2.19 Mapping from the prototype
 

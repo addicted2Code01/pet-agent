@@ -69,6 +69,7 @@ Roles map to **permission sets**. Engagements and standing-caregiver memberships
 - AI usage records hold token counts and costs, never prompt or reply text. Assistant answers to caregivers are kept only in the care thread (§4.9).
 - An edge node offers only the fixed capabilities the owner turns on. Pairing it doesn't let the cloud run commands on the owner's machine.
 - Writes made through AI carry `actor.integration = "assistant"` and `on_behalf_of`. Those that record or change a dose, a medication or a schedule require the same safety checks and a tap-to-confirm (on SMS, a confirming reply) from the person the assistant acts for.
+- The assistant never states a safety fact in its own words. Times, doses and yes-or-no answers come only in the answer line that code renders, and its words are checked ([03 §3.8.4](03-core-architecture.md#384-keeping-answers-grounded)).
 
 ## 4.5 Media privacy
 

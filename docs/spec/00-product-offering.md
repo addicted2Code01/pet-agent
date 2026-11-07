@@ -110,6 +110,7 @@ The MVP is everything marked MVP in [01](01-features.md), organized around the f
 | Too-soon or double doses caught by the dose check | Count and report | Proof the safety promise works, and a number to market with |
 | Sitters who say the guide had everything they needed (one tap at handback) | 90 % or better | The handoff is the product |
 | AI answers corrected by owners | Track the rate; review causes with the owner's permission | Each correction shows where the records or the model need fixing |
+| AI replies that pass the wording check | Track the rate on the first try and after one rewrite | Shows how often the model tries to state a time, dose or yes-or-no itself |
 | New households that get a sitter joined within 30 days | Set after the beta | Activation |
 | Households active weekly between trips | Set after the beta | The everyday hook |
 

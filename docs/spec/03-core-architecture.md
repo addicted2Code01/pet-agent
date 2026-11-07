@@ -100,6 +100,7 @@ Queries return structured, typed results, ready for any adapter to render. The s
 | `Activity(scope, range)`, `Report(report_id)` | Events grouped for display; visit, daily and stay reports. |
 | `Drafts(import_job_id / template_id)` | Pending drafts with their source excerpts, for the owner to accept, edit or reject. |
 | `Search(text, filters)` | Full-text across names, aliases and knowledge, via the `SearchIndex` port. |
+| `ResolveLocalTime(fields, reference, zone)` | The local date and time that a time given in words refers to (a weekday, a part of the day, a clock time, "tomorrow"), counted from a reference date, with every candidate when more than one fits (§3.8.4). |
 | `AiUsage(scope, period)` | Used and remaining for the credit balance and each limit; breakdown by member, purpose and model; reset time; projected run-out date. |
 | `Readiness(engagement_id)` | Whether the trip is ready: the sitter's device has joined; emergency vet and vet authorization set; every medication has "if missed" instructions; no supply marked out; no device that gets the trip's reminders reports a status other than `scheduled` ([07 §7.3](07-portable-core.md#73-the-host-interface)); and (V2) every capability the engagement depends on is reachable (§3.9.4). For a home install it also checks ([08 §8.10](08-home-and-cloud.md#810-outages-and-availability-at-home)):<br>- reachability and uptime;<br>- a certificate valid for more than 14 days;<br>- sleep and power settings;<br>- backup age;<br>- the newest time-zone snapshot;<br>- backup reminders on for medication trips;<br>- every door code needed outside covered by a stated fallback, or able to be staged (the sitter's device has joined and may reveal it) and staged once access opens. |
 | `LinkedDevices(scope)`, `PendingJoins()`, `SecurityLog(range)` | Each person's devices and grants; joins waiting for approval; the security log of joins, approvals, step-ups, reveals and revocations. |
@@ -172,8 +173,8 @@ Any port except `Repository`/`UnitOfWork` can also be served by a `RemoteCapabil
 The assistant is a driving adapter with this loop:
 
 1. Build a prompt from `Context(scope, budget)`: compact, current, permission-filtered.
-2. Expose core **queries and commands as tools** (`whats_next`, `can_administer`, `where_is`, `complete_task`, `record_administration`, `report_incident`…), each a thin wrapper running with the user's `CallerContext` (`interface = "assistant"`, `on_behalf_of = user`).
-3. The model chooses tools and phrases results. **Facts come only from tool results**: doses and times are quoted from `CanAdminister` and `instructions_verbatim`, never computed by the model. When the records don't answer a question, the assistant says so and passes it to the owner (`AskOwner`) instead of guessing. The owner's reply goes back to the sitter, and the assistant drafts it as a record that the owner saves with one tap (principle 11).
+2. Expose core **queries and commands as tools** (`whats_next`, `can_administer`, `where_is`, `complete_task`, `record_administration`, `report_incident`…), each a thin wrapper running with the user's `CallerContext` (`interface = "assistant"`, `on_behalf_of = user`). Safety tools take the pet and medication as the person said them, and the core works out which order is meant (§3.8.4).
+3. The model chooses tools and phrases results. **Facts come only from tool results**: times, doses and yes-or-no answers reach people only in an answer line that code renders from the result, and the model's own words are checked (§3.8.4). When the records don't answer a question, the assistant says so and passes it to the owner (`AskOwner`) instead of guessing. The owner's reply goes back to the sitter, and the assistant drafts it as a record that the owner saves with one tap (principle 11).
 4. Writes requested through the assistant ("I gave him his pill") go through the same commands, so they're validated, safety-checked and logged as *assistant on behalf of Jane*. One that records or changes a dose, a medication or a schedule waits until the person the assistant acts for confirms it ([04 §4.4](04-permissions-privacy.md#44-ai-and-external-interfaces)).
 5. The assistant's own model calls go through the `ModelGateway` (§3.10), so they're routed by sensitivity and metered against the account's allotment.
 6. During an engagement, every answer is posted to the care thread with its `sources` (the records and versions it used), so the owner sees it live and can correct it (§3.8.2).
@@ -187,9 +188,9 @@ In MVP the assistant is scoped to grounded answers about the household ("where's
 The other model use in MVP turns the note an owner already leaves for sitters into structured drafts:
 
 1. **Mask.** A deterministic detector in the core finds likely secrets (door and alarm codes, passwords) and replaces them with placeholders before any hosted model sees the text. The owner is shown what will be sent.
-2. **Draft.** The masked text goes through the `ModelGateway` (§3.10) with purpose `care_note_import`. The model returns proposed routines, medication orders, contacts, places and notes, each with the sentences it came from.
+2. **Draft.** The masked text goes through the `ModelGateway` (§3.10) with purpose `care_note_import`. The model returns proposed routines, medication orders, contacts, places and notes, each with the sentences it came from. Times given in words come back as the words and the fields the model read, never as dates (§3.8.4).
 3. **Validate.** Each proposal is checked against its target's schema. Anything invalid stays a draft with the problem marked.
-4. **Confirm.** The owner accepts, edits or rejects each `Draft`. Nothing becomes a record without a person accepting it (principle 11). An accepted medication draft keeps its source sentences as `instructions_verbatim`, and masked secrets come back as secret drafts filled in locally from the original text.
+4. **Confirm.** The owner accepts, edits or rejects each `Draft`. Nothing becomes a record without a person accepting it (principle 11). Times given in words are resolved by the kernel against the day the note was written, which the owner confirms, and shown with their weekday and date; an ambiguous one has to be picked before its draft can be accepted. An accepted medication draft keeps its source sentences as `instructions_verbatim`, and masked secrets come back as secret drafts filled in locally from the original text.
 
 New accounts get onboarding credits for this ([00 §0.7](00-product-offering.md#07-packaging-proposal)), so setup never hits a paywall. Owners with an edge node can route import to their local model, which may see the unmasked text.
 
@@ -234,6 +235,39 @@ A trip has one care thread, but people reach it in different ways: the owner in 
 **The combined view.** `Thread`, `Timeline` and `Inbox` merge every channel into one stream, ordered by when the core received each message, with a badge showing where each came from. Both sides see the same conversation: the owner sees everything, and the sitter sees the whole trip thread, including what the owner sent from Discord, on whichever channel they use. Because `Context()` includes the merged thread, the assistant answering on WhatsApp knows what the owner said on Discord.
 
 The **MCP server** is the same tool set exposed over MCP, so any MCP-capable client gets exactly the same safe behavior. Chat bots are thin adapters on top of the assistant.
+
+### 3.8.4 Keeping answers grounded
+
+Principle 2 says the AI may word a safety answer but never work it out. These safeguards keep that true even when the model doesn't follow its instructions.
+
+**Which pet and which medication.**
+- Safety tools take the pet and medication as the person said them ("Sonic", "his Cerenia", "the anti-nausea pill"). The core matches the words against names and aliases (02 §2.1) among the orders the caller may see.
+- With one match, the answer names what was checked ("Sonic · Cerenia 16 mg"). With several, the core returns them and the assistant asks which ("Sonic's Cerenia or Biscuit's?"). With none, it says so, and the question goes to the owner (`AskOwner`).
+
+**Times given in words.**
+- A model never turns "Tuesday morning" or "at 6" into a date. It returns the words and the fields it read: a weekday, a part of the day, a clock time. The kernel resolves those against a reference date in the site's zone (`ResolveLocalTime`).
+- In chat the reference is now. In care-note import it's the day the note was written, which the owner confirms.
+- Parts of the day map to times the household sets; morning is 08:00 unless the owner changes it.
+- Whatever a person confirms shows the weekday and date: "Not before Tue, Nov 10, 08:00". When more than one date fits, such as "Tuesday" in a note written on a Tuesday, the draft is flagged and the owner picks one (02 invariant 29).
+
+**The answer line.**
+- Code writes the facts. For each safety query (`CanAdminister`, `WhatsNext`, `Today`, and the last dose), a fixed template turns the result into one line in the reader's language, from the kernel's local fields: "Not yet. Sonic's Cerenia isn't allowed before Tue, Nov 10 at 8:00 am. Last dose: Sun, Nov 8 at 7:55 am." For a medication, the owner's instructions follow word for word. It's the same text the "Can I give it now?" button shows.
+- The line always comes first and looks different: bold in the app, the first line of a text. The model writes only its own words, which follow the line ("Sorry he's sick again. If he keeps vomiting, call the vet.").
+
+**Checking the model's words.**
+1. Plain code scans the model's words for numbers (in digits or words), times and dates ("am", "noon", "tonight", "tomorrow", weekday and month names), dose words ("mg", "ml", "tablet", "click"), and a yes or no on giving a dose ("you can", "go ahead", "wait", "don't").
+2. If it finds any, the model gets one rewrite and is told exactly what to drop: "Your words contain '8', 'tonight' and 'you can'. The answer line already gives the decision and the times."
+3. The same check runs on the rewrite. If that fails too, the person gets the answer line alone.
+
+- In the app and on the web, the answer line appears at once and the model's words follow once they pass, so a rewrite delays nothing that matters for safety. By text, a rewrite gets about 3 seconds, then one message goes out.
+- A rewrite is another model call, metered like any other (§3.10).
+- The check covers every reply in a turn that ran a safety query, and any message that names one of the household's medications. If the model answers about a medication without running the query, the core runs it from the names, or asks which one is meant.
+
+**Measuring it.**
+- Each check is stored with its message: passed, rewritten or dropped, and what it found. The first-try pass rate, and how often a rewrite fixes it, are AI quality measures beside the correction rate ([00 §0.8](00-product-offering.md#08-mvp-scope-and-success-measures)).
+- A reply that fails twice in the same way is flagged for review, like a correction. The model may "believe" something the records don't say, such as an instruction given to the sitter in person.
+- A word list misses some phrasings ("he'll be fine to have it"), which is why the line always comes first. Phrasings that slip through, found in testing or corrected by owners, are added to the list and to the test questions.
+- **Test questions.** A fixed set of questions in many phrasings, SMS typos included, each with the tool, order and answer line it should produce. It runs whenever the model, the prompt or a template changes, and a change that picks the wrong pet or medication doesn't ship.
 
 ## 3.9 Deployment and placement
 
